@@ -171,44 +171,129 @@ class Game3D {
         const tank = new THREE.Group();
         const scaleFactor = size / 20; // Base size is 20
 
-        // Tank body
-        const bodyGeometry = new THREE.BoxGeometry(15 * scaleFactor, 8 * scaleFactor, 20 * scaleFactor);
+        // Darken the color slightly for better realism
+        const baseColor = new THREE.Color(color);
+        const darkerColor = baseColor.clone().multiplyScalar(0.8);
+        const trackColor = new THREE.Color(0x2a2a2a);
+
+        // Tank tracks (left side)
+        const trackGeometry = new THREE.BoxGeometry(3 * scaleFactor, 5 * scaleFactor, 28 * scaleFactor);
+        const trackMaterial = new THREE.MeshLambertMaterial({ color: trackColor });
+        const leftTrack = new THREE.Mesh(trackGeometry, trackMaterial);
+        leftTrack.position.set(-8 * scaleFactor, 2.5 * scaleFactor, 0);
+        leftTrack.castShadow = true;
+        leftTrack.receiveShadow = true;
+        tank.add(leftTrack);
+
+        // Tank tracks (right side)
+        const rightTrack = new THREE.Mesh(trackGeometry, trackMaterial);
+        rightTrack.position.set(8 * scaleFactor, 2.5 * scaleFactor, 0);
+        rightTrack.castShadow = true;
+        rightTrack.receiveShadow = true;
+        tank.add(rightTrack);
+
+        // Main body (more elongated and realistic)
+        const bodyGeometry = new THREE.BoxGeometry(12 * scaleFactor, 6 * scaleFactor, 26 * scaleFactor);
         const bodyMaterial = new THREE.MeshLambertMaterial({ color: color });
         const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-        body.position.y = 4 * scaleFactor;
+        body.position.y = 6 * scaleFactor;
         body.castShadow = true;
         body.receiveShadow = true;
         tank.add(body);
 
-        // Tank turret
+        // Upper hull section (adds more detail)
+        const upperHullGeometry = new THREE.BoxGeometry(10 * scaleFactor, 3 * scaleFactor, 18 * scaleFactor);
+        const upperHullMaterial = new THREE.MeshLambertMaterial({ color: darkerColor });
+        const upperHull = new THREE.Mesh(upperHullGeometry, upperHullMaterial);
+        upperHull.position.y = 10.5 * scaleFactor;
+        upperHull.position.z = 2 * scaleFactor; // Slightly forward
+        upperHull.castShadow = true;
+        upperHull.receiveShadow = true;
+        tank.add(upperHull);
+
+        // Tank turret (more realistic proportions)
         const turretGeometry = new THREE.CylinderGeometry(
+            6 * scaleFactor,
+            7 * scaleFactor,
             5 * scaleFactor,
-            5 * scaleFactor,
-            5 * scaleFactor,
-            8
+            16
         );
         const turretMaterial = new THREE.MeshLambertMaterial({ color: color });
         const turret = new THREE.Mesh(turretGeometry, turretMaterial);
-        turret.position.y = 10 * scaleFactor;
+        turret.position.y = 14.5 * scaleFactor;
+        turret.position.z = 0;
         turret.castShadow = true;
         turret.receiveShadow = true;
         tank.add(turret);
 
-        // Tank barrel (gun)
-        const barrelGeometry = new THREE.CylinderGeometry(
+        // Turret top hatch detail
+        const hatchGeometry = new THREE.CylinderGeometry(
+            2.5 * scaleFactor,
+            2.5 * scaleFactor,
             1 * scaleFactor,
-            1 * scaleFactor,
-            12 * scaleFactor,
             8
         );
-        const barrelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const hatchMaterial = new THREE.MeshLambertMaterial({ color: darkerColor });
+        const hatch = new THREE.Mesh(hatchGeometry, hatchMaterial);
+        hatch.position.y = 17.5 * scaleFactor;
+        hatch.position.z = -2 * scaleFactor;
+        hatch.castShadow = true;
+        tank.add(hatch);
+
+        // Tank barrel (gun) - longer and more prominent
+        const barrelGeometry = new THREE.CylinderGeometry(
+            1.2 * scaleFactor,
+            1.5 * scaleFactor,
+            20 * scaleFactor,
+            12
+        );
+        const barrelMaterial = new THREE.MeshLambertMaterial({
+            color: 0x1a1a1a,
+            emissive: 0x0a0a0a
+        });
         const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
         barrel.rotation.z = Math.PI / 2;
-        barrel.position.y = 10 * scaleFactor;
-        barrel.position.x = 10 * scaleFactor;
+        barrel.position.y = 14.5 * scaleFactor;
+        barrel.position.x = 14 * scaleFactor;
         barrel.castShadow = true;
         barrel.receiveShadow = true;
         tank.add(barrel);
+
+        // Barrel muzzle brake (realistic detail)
+        const muzzleGeometry = new THREE.CylinderGeometry(
+            1.8 * scaleFactor,
+            1.8 * scaleFactor,
+            2 * scaleFactor,
+            8
+        );
+        const muzzleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const muzzle = new THREE.Mesh(muzzleGeometry, muzzleMaterial);
+        muzzle.rotation.z = Math.PI / 2;
+        muzzle.position.y = 14.5 * scaleFactor;
+        muzzle.position.x = 24 * scaleFactor;
+        muzzle.castShadow = true;
+        tank.add(muzzle);
+
+        // Front armor plate (angled for realism)
+        const frontArmorGeometry = new THREE.BoxGeometry(12 * scaleFactor, 5 * scaleFactor, 2 * scaleFactor);
+        const frontArmorMaterial = new THREE.MeshLambertMaterial({ color: darkerColor });
+        const frontArmor = new THREE.Mesh(frontArmorGeometry, frontArmorMaterial);
+        frontArmor.position.y = 7 * scaleFactor;
+        frontArmor.position.z = -14 * scaleFactor;
+        frontArmor.rotation.x = -0.3; // Slight angle
+        frontArmor.castShadow = true;
+        frontArmor.receiveShadow = true;
+        tank.add(frontArmor);
+
+        // Rear armor plate
+        const rearArmorGeometry = new THREE.BoxGeometry(12 * scaleFactor, 5 * scaleFactor, 1.5 * scaleFactor);
+        const rearArmorMaterial = new THREE.MeshLambertMaterial({ color: darkerColor });
+        const rearArmor = new THREE.Mesh(rearArmorGeometry, rearArmorMaterial);
+        rearArmor.position.y = 7 * scaleFactor;
+        rearArmor.position.z = 13.5 * scaleFactor;
+        rearArmor.castShadow = true;
+        rearArmor.receiveShadow = true;
+        tank.add(rearArmor);
 
         // Store references for later use
         tank.userData.body = body;
