@@ -430,8 +430,10 @@ async def init_app():
 def main():
     """Main entry point"""
     logger.info("Starting game server...")
+    port = int(os.environ.get('PORT', 8080))
+    logger.info(f"Server will listen on port {port}")
     app = init_app()
-    web.run_app(app, host='0.0.0.0', port=8080)
+    web.run_app(app, host='0.0.0.0', port=port)
 
 
 if __name__ == '__main__':
