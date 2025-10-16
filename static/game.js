@@ -43,9 +43,11 @@ class Game {
         this.lastClickTime = 0;
         this.doubleClickThreshold = 300; // milliseconds for double click/tap detection
 
-        // Interpolation state for smooth movement
+        // Advanced interpolation state for smooth movement with buffering
         this.playerInterpolation = {}; // Stores interpolation data for each remote player
+        this.playerUpdateBuffer = {}; // Buffer to store incoming position updates
         this.lastFrameTime = performance.now();
+        this.interpolationDelay = 100; // ms - intentional delay for smooth interpolation
 
         this.init();
     }
@@ -157,41 +159,45 @@ class Game {
                 break;
 
             case 'state':
-                // Update interpolation data for remote players before updating state
+                // Use buffered interpolation for smooth movement
+                const currentTime = performance.now();
+
+                // Add server updates to buffer with timestamp
                 for (const [id, newPlayerData] of Object.entries(message.data.players)) {
                     // Skip local player - no interpolation needed
                     if (id === this.playerId) {
                         continue;
                     }
 
-                    // Initialize interpolation data if this is a new player
+                    // Initialize buffer for new players
+                    if (!this.playerUpdateBuffer[id]) {
+                        this.playerUpdateBuffer[id] = [];
+                    }
+
+                    // Add update to buffer with server timestamp
+                    this.playerUpdateBuffer[id].push({
+                        x: newPlayerData.x,
+                        y: newPlayerData.y,
+                        angle: newPlayerData.angle,
+                        timestamp: currentTime
+                    });
+
+                    // Keep only last 5 updates (prevents buffer from growing unbounded)
+                    if (this.playerUpdateBuffer[id].length > 5) {
+                        this.playerUpdateBuffer[id].shift();
+                    }
+
+                    // Initialize interpolation state for new players
                     if (!this.playerInterpolation[id]) {
                         this.playerInterpolation[id] = {
-                            prevX: newPlayerData.x,
-                            prevY: newPlayerData.y,
-                            prevAngle: newPlayerData.angle,
-                            targetX: newPlayerData.x,
-                            targetY: newPlayerData.y,
-                            targetAngle: newPlayerData.angle,
-                            progress: 1
+                            currentX: newPlayerData.x,
+                            currentY: newPlayerData.y,
+                            currentAngle: newPlayerData.angle
                         };
-                    } else {
-                        // Store current target as previous position
-                        const interp = this.playerInterpolation[id];
-                        interp.prevX = interp.targetX;
-                        interp.prevY = interp.targetY;
-                        interp.prevAngle = interp.targetAngle;
-
-                        // Set new target from server
-                        interp.targetX = newPlayerData.x;
-                        interp.targetY = newPlayerData.y;
-                        interp.targetAngle = newPlayerData.angle;
-
-                        // Reset interpolation progress
-                        interp.progress = 0;
                     }
                 }
 
+                // Update local player and bullets directly
                 this.players = message.data.players;
                 this.bullets = message.data.bullets;
 
@@ -218,6 +224,7 @@ class Game {
             case 'player_left':
                 delete this.players[message.player_id];
                 delete this.playerInterpolation[message.player_id];
+                delete this.playerUpdateBuffer[message.player_id];
                 console.log('Player left:', message.player_id);
                 break;
 
@@ -353,10 +360,13 @@ class Game {
     }
 
     updateInterpolation(deltaTime) {
-        // Update interpolation for all remote players
-        for (const [id, interp] of Object.entries(this.playerInterpolation)) {
-            // Skip if no player data
-            if (!this.players[id]) {
+        const currentTime = performance.now();
+        const renderTime = currentTime - this.interpolationDelay;
+
+        // Update interpolation for all remote players using buffered updates
+        for (const [id, buffer] of Object.entries(this.playerUpdateBuffer)) {
+            // Skip if no player data or buffer is empty
+            if (!this.players[id] || buffer.length === 0) {
                 continue;
             }
 
@@ -365,26 +375,75 @@ class Game {
                 continue;
             }
 
-            // Update interpolation progress
-            if (interp.progress < 1) {
-                // Interpolate over the expected update interval (50ms)
-                interp.progress += deltaTime / this.positionUpdateThrottle;
-                interp.progress = Math.min(1, interp.progress);
+            const interp = this.playerInterpolation[id];
+            if (!interp) {
+                continue;
+            }
 
-                // Use ease-out cubic for smoother feel
-                const t = this.easeOutCubic(interp.progress);
+            // Find the two updates to interpolate between
+            // We want to find updates where: update1.timestamp <= renderTime <= update2.timestamp
+            let update1 = null;
+            let update2 = null;
 
-                // Update player position with interpolated values
-                this.players[id].x = interp.prevX + (interp.targetX - interp.prevX) * t;
-                this.players[id].y = interp.prevY + (interp.targetY - interp.prevY) * t;
+            for (let i = 0; i < buffer.length - 1; i++) {
+                if (buffer[i].timestamp <= renderTime && buffer[i + 1].timestamp >= renderTime) {
+                    update1 = buffer[i];
+                    update2 = buffer[i + 1];
+                    break;
+                }
+            }
+
+            // If we found two updates to interpolate between
+            if (update1 && update2) {
+                // Calculate interpolation factor based on time
+                const totalTime = update2.timestamp - update1.timestamp;
+                const elapsed = renderTime - update1.timestamp;
+                const t = totalTime > 0 ? Math.min(1, elapsed / totalTime) : 1;
+
+                // Apply smooth easing
+                const smoothT = this.easeOutCubic(t);
+
+                // Interpolate position
+                interp.currentX = update1.x + (update2.x - update1.x) * smoothT;
+                interp.currentY = update1.y + (update2.y - update1.y) * smoothT;
 
                 // Interpolate angle (handle wrap-around)
-                let angleDiff = interp.targetAngle - interp.prevAngle;
+                let angleDiff = update2.angle - update1.angle;
                 // Normalize angle difference to [-PI, PI]
                 while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
                 while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                interp.currentAngle = update1.angle + angleDiff * smoothT;
 
-                this.players[id].angle = interp.prevAngle + angleDiff * t;
+                // Update player position with interpolated values
+                this.players[id].x = interp.currentX;
+                this.players[id].y = interp.currentY;
+                this.players[id].angle = interp.currentAngle;
+
+            } else if (buffer.length > 0) {
+                // If we can't find two updates to interpolate, use the most recent one
+                // This handles cases where we're ahead of or behind the buffer
+                const latestUpdate = buffer[buffer.length - 1];
+
+                // Smoothly move towards the latest position
+                const speed = 0.3; // Smoothing factor
+                interp.currentX += (latestUpdate.x - interp.currentX) * speed;
+                interp.currentY += (latestUpdate.y - interp.currentY) * speed;
+
+                // Handle angle smoothing
+                let angleDiff = latestUpdate.angle - interp.currentAngle;
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                interp.currentAngle += angleDiff * speed;
+
+                // Update player position
+                this.players[id].x = interp.currentX;
+                this.players[id].y = interp.currentY;
+                this.players[id].angle = interp.currentAngle;
+            }
+
+            // Clean up old updates that are no longer needed
+            while (buffer.length > 2 && buffer[0].timestamp < renderTime - 200) {
+                buffer.shift();
             }
         }
     }

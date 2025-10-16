@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Buffered Interpolation Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+        }
+        .description {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .canvas-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .canvas-wrapper {
+            flex: 1;
+            min-width: 350px;
+        }
+        .canvas-wrapper h2 {
+            text-align: center;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+        canvas {
+            border: 2px solid #4CAF50;
+            display: block;
+            margin: 0 auto;
+            background-color: #0a0a0a;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .info {
+            background-color: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .stat-item {
+            background-color: #1a3a1a;
+            padding: 10px 20px;
+            border-radius: 4px;
+        }
+        .highlight {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Buffered Interpolation vs Simple Interpolation</h1>
+
+        <div class="description">
+            <h3>What's the difference?</h3>
+            <p><strong>Simple Interpolation (Old PR #24):</strong> Interpolates directly between current and target position assuming fixed 50ms intervals. Works poorly when server updates arrive at different rates (30 FPS = 33ms).</p>
+            <p><strong>Buffered Interpolation (New - Radical Approach):</strong> Buffers incoming updates and interpolates between them using actual timestamps. Adds intentional 100ms delay but provides butter-smooth movement regardless of server update rate.</p>
+        </div>
+
+        <div class="canvas-container">
+            <div class="canvas-wrapper">
+                <h2>❌ Old: Simple Interpolation</h2>
+                <canvas id="canvas-old" width="400" height="400"></canvas>
+            </div>
+            <div class="canvas-wrapper">
+                <h2>✅ New: Buffered Interpolation</h2>
+                <canvas id="canvas-new" width="400" height="400"></canvas>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="toggleUpdates">Pause Server Updates</button>
+            <button id="resetPositions">Reset Positions</button>
+        </div>
+
+        <div class="info">
+            <h3 style="text-align: center;">Live Statistics</h3>
+            <div class="stats">
+                <div class="stat-item">
+                    Server Update Rate: <span class="highlight" id="updateRate">60</span> FPS
+                </div>
+                <div class="stat-item">
+                    Interpolation Delay: <span class="highlight">100</span> ms
+                </div>
+                <div class="stat-item">
+                    Buffer Size: <span class="highlight" id="bufferSize">0</span> updates
+                </div>
+                <div class="stat-item">
+                    Updates Running: <span class="highlight" id="updatesStatus">Yes</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="description" style="margin-top: 20px;">
+            <h3>🎯 Key Improvements</h3>
+            <ul>
+                <li><strong>Adaptive Timing:</strong> Uses actual timestamps instead of assuming fixed intervals</li>
+                <li><strong>Update Buffering:</strong> Stores recent updates to interpolate between</li>
+                <li><strong>Smooth Fallback:</strong> Gracefully handles missing updates with exponential smoothing</li>
+                <li><strong>60 FPS Server:</strong> Doubled server update rate from 30 to 60 FPS</li>
+                <li><strong>Intentional Lag:</strong> 100ms delay creates smooth buffer for perfect interpolation</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Server simulation
+        let serverUpdateInterval = 1000 / 60; // 60 FPS
+        let updatesRunning = true;
+        let serverAngle = 0;
+        const serverRadius = 150;
+        const centerX = 200;
+        const centerY = 200;
+
+        // Calculate server position
+        function getServerPosition() {
+            return {
+                x: centerX + Math.cos(serverAngle) * serverRadius,
+                y: centerY + Math.sin(serverAngle) * serverRadius,
+                angle: serverAngle
+            };
+        }
+
+        // Old simple interpolation player
+        const oldPlayer = {
+            x: centerX,
+            y: centerY,
+            angle: 0,
+            prevX: centerX,
+            prevY: centerY,
+            prevAngle: 0,
+            targetX: centerX,
+            targetY: centerY,
+            targetAngle: 0,
+            progress: 1
+        };
+
+        // New buffered interpolation player
+        const newPlayer = {
+            currentX: centerX,
+            currentY: centerY,
+            currentAngle: 0
+        };
+        const updateBuffer = [];
+        const interpolationDelay = 100; // ms
+
+        // Canvas contexts
+        const canvasOld = document.getElementById('canvas-old');
+        const ctxOld = canvasOld.getContext('2d');
+        const canvasNew = document.getElementById('canvas-new');
+        const ctxNew = canvasNew.getContext('2d');
+
+        // Easing function
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
+        // Old interpolation update
+        function updateOldInterpolation(deltaTime) {
+            if (oldPlayer.progress < 1) {
+                oldPlayer.progress += deltaTime / 50; // Assumes 50ms fixed interval
+                oldPlayer.progress = Math.min(1, oldPlayer.progress);
+
+                const t = easeOutCubic(oldPlayer.progress);
+                oldPlayer.x = oldPlayer.prevX + (oldPlayer.targetX - oldPlayer.prevX) * t;
+                oldPlayer.y = oldPlayer.prevY + (oldPlayer.targetY - oldPlayer.prevY) * t;
+
+                let angleDiff = oldPlayer.targetAngle - oldPlayer.prevAngle;
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                oldPlayer.angle = oldPlayer.prevAngle + angleDiff * t;
+            }
+        }
+
+        // New buffered interpolation update
+        function updateNewInterpolation() {
+            const currentTime = performance.now();
+            const renderTime = currentTime - interpolationDelay;
+
+            if (updateBuffer.length === 0) return;
+
+            // Find two updates to interpolate between
+            let update1 = null;
+            let update2 = null;
+
+            for (let i = 0; i < updateBuffer.length - 1; i++) {
+                if (updateBuffer[i].timestamp <= renderTime && updateBuffer[i + 1].timestamp >= renderTime) {
+                    update1 = updateBuffer[i];
+                    update2 = updateBuffer[i + 1];
+                    break;
+                }
+            }
+
+            if (update1 && update2) {
+                // Interpolate between two updates
+                const totalTime = update2.timestamp - update1.timestamp;
+                const elapsed = renderTime - update1.timestamp;
+                const t = totalTime > 0 ? Math.min(1, elapsed / totalTime) : 1;
+                const smoothT = easeOutCubic(t);
+
+                newPlayer.currentX = update1.x + (update2.x - update1.x) * smoothT;
+                newPlayer.currentY = update1.y + (update2.y - update1.y) * smoothT;
+
+                let angleDiff = update2.angle - update1.angle;
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                newPlayer.currentAngle = update1.angle + angleDiff * smoothT;
+            } else if (updateBuffer.length > 0) {
+                // Fallback: smooth towards latest
+                const latest = updateBuffer[updateBuffer.length - 1];
+                const speed = 0.3;
+                newPlayer.currentX += (latest.x - newPlayer.currentX) * speed;
+                newPlayer.currentY += (latest.y - newPlayer.currentY) * speed;
+
+                let angleDiff = latest.angle - newPlayer.currentAngle;
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                newPlayer.currentAngle += angleDiff * speed;
+            }
+
+            // Clean up old updates
+            while (updateBuffer.length > 2 && updateBuffer[0].timestamp < renderTime - 200) {
+                updateBuffer.shift();
+            }
+
+            // Update buffer size display
+            document.getElementById('bufferSize').textContent = updateBuffer.length;
+        }
+
+        // Simulate server update
+        function simulateServerUpdate() {
+            const pos = getServerPosition();
+            const timestamp = performance.now();
+
+            // Update old player (simple interpolation)
+            oldPlayer.prevX = oldPlayer.targetX;
+            oldPlayer.prevY = oldPlayer.targetY;
+            oldPlayer.prevAngle = oldPlayer.targetAngle;
+            oldPlayer.targetX = pos.x;
+            oldPlayer.targetY = pos.y;
+            oldPlayer.targetAngle = pos.angle;
+            oldPlayer.progress = 0;
+
+            // Update new player (buffered interpolation)
+            updateBuffer.push({
+                x: pos.x,
+                y: pos.y,
+                angle: pos.angle,
+                timestamp: timestamp
+            });
+
+            // Keep buffer size reasonable
+            if (updateBuffer.length > 10) {
+                updateBuffer.shift();
+            }
+        }
+
+        // Draw function
+        function draw(ctx, player, isBuffered) {
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, 400, 400);
+
+            // Draw path circle
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, serverRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw actual server position
+            const serverPos = getServerPosition();
+            ctx.fillStyle = '#4CAF50';
+            ctx.beginPath();
+            ctx.arc(serverPos.x, serverPos.y, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw player
+            const x = isBuffered ? player.currentX : player.x;
+            const y = isBuffered ? player.currentY : player.y;
+
+            ctx.fillStyle = '#ff6666';
+            ctx.beginPath();
+            ctx.arc(x, y, 15, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Draw connection line
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(serverPos.x, serverPos.y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw labels
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px Arial';
+            ctx.fillText('Server (actual)', serverPos.x + 12, serverPos.y);
+            ctx.fillText('Client (rendered)', x + 20, y);
+        }
+
+        // Animation loop
+        let lastTime = performance.now();
+        let lastServerUpdate = performance.now();
+
+        function animate(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Simulate server updates at configured rate
+            if (updatesRunning && currentTime - lastServerUpdate >= serverUpdateInterval) {
+                lastServerUpdate = currentTime;
+                serverAngle += 0.05;
+                simulateServerUpdate();
+            }
+
+            // Update old interpolation
+            updateOldInterpolation(deltaTime);
+
+            // Update new interpolation
+            updateNewInterpolation();
+
+            // Draw both
+            draw(ctxOld, oldPlayer, false);
+            draw(ctxNew, newPlayer, true);
+
+            requestAnimationFrame(animate);
+        }
+
+        // Controls
+        document.getElementById('toggleUpdates').addEventListener('click', function() {
+            updatesRunning = !updatesRunning;
+            this.textContent = updatesRunning ? 'Pause Server Updates' : 'Resume Server Updates';
+            document.getElementById('updatesStatus').textContent = updatesRunning ? 'Yes' : 'No';
+        });
+
+        document.getElementById('resetPositions').addEventListener('click', function() {
+            serverAngle = 0;
+            oldPlayer.x = oldPlayer.prevX = oldPlayer.targetX = centerX;
+            oldPlayer.y = oldPlayer.prevY = oldPlayer.targetY = centerY;
+            newPlayer.currentX = centerX;
+            newPlayer.currentY = centerY;
+            updateBuffer.length = 0;
+        });
+
+        // Start animation
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
