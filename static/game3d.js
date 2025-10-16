@@ -1,0 +1,681 @@
+/**
+ * Client-side 3D game logic for multiplayer tank shooter using Three.js
+ */
+
+class Game3D {
+    constructor() {
+        this.container = document.getElementById('game-canvas-container');
+        this.ws = null;
+        this.playerId = null;
+        this.players = {};
+        this.bullets = {};
+        this.playerMeshes = {};
+        this.bulletMeshes = {};
+        this.localPlayer = {
+            x: 0,
+            y: 0,
+            angle: 0,
+            size: 20,
+            color: '#ffffff',
+            name: 'player'
+        };
+        this.hoveredPlayer = null;
+        this.keys = {
+            ArrowUp: false,
+            ArrowDown: false,
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+        this.config = {
+            canvas_width: 800,
+            canvas_height: 600,
+            player_speed: 5
+        };
+        this.lastShootTime = 0;
+        this.shootCooldown = 250; // milliseconds
+        this.lastAngleUpdateTime = 0;
+        this.angleUpdateThrottle = 50; // milliseconds
+        this.lastPositionUpdateTime = 0;
+        this.positionUpdateThrottle = 50; // milliseconds
+        this.mouse = { x: 0, y: 0 };
+        this.raycaster = new THREE.Raycaster();
+
+        this.init();
+    }
+
+    init() {
+        this.setupThreeJS();
+        this.setupNameModal();
+        this.setupWebSocket();
+        this.setupControls();
+        this.startGameLoop();
+    }
+
+    setupThreeJS() {
+        // Create scene
+        this.scene = new THREE.Scene();
+        this.scene.background = new THREE.Color(0x0a0a0a);
+
+        // Create camera (top-down view with slight angle)
+        this.camera = new THREE.PerspectiveCamera(
+            60,
+            this.container.clientWidth / this.container.clientHeight,
+            1,
+            2000
+        );
+        this.camera.position.set(400, 500, 400);
+        this.camera.lookAt(400, 0, 300);
+
+        // Create renderer
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.container.appendChild(this.renderer.domElement);
+
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+        this.scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(400, 600, 400);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.camera.left = -500;
+        directionalLight.shadow.camera.right = 500;
+        directionalLight.shadow.camera.top = 500;
+        directionalLight.shadow.camera.bottom = -500;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        this.scene.add(directionalLight);
+
+        // Add ground plane
+        const groundGeometry = new THREE.PlaneGeometry(800, 600);
+        const groundMaterial = new THREE.MeshLambertMaterial({
+            color: 0x1a3a1a,
+            side: THREE.DoubleSide
+        });
+        this.ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        this.ground.rotation.x = -Math.PI / 2;
+        this.ground.position.set(400, 0, 300);
+        this.ground.receiveShadow = true;
+        this.scene.add(this.ground);
+
+        // Add grid helper
+        const gridHelper = new THREE.GridHelper(800, 20, 0x4CAF50, 0x2a2a2a);
+        gridHelper.position.set(400, 0.1, 300);
+        this.scene.add(gridHelper);
+
+        // Add walls
+        this.createWalls();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        });
+    }
+
+    createWalls() {
+        const wallHeight = 50;
+        const wallThickness = 5;
+        const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x4CAF50 });
+
+        // North wall
+        const northWall = new THREE.Mesh(
+            new THREE.BoxGeometry(800, wallHeight, wallThickness),
+            wallMaterial
+        );
+        northWall.position.set(400, wallHeight / 2, 0);
+        northWall.castShadow = true;
+        northWall.receiveShadow = true;
+        this.scene.add(northWall);
+
+        // South wall
+        const southWall = new THREE.Mesh(
+            new THREE.BoxGeometry(800, wallHeight, wallThickness),
+            wallMaterial
+        );
+        southWall.position.set(400, wallHeight / 2, 600);
+        southWall.castShadow = true;
+        southWall.receiveShadow = true;
+        this.scene.add(southWall);
+
+        // West wall
+        const westWall = new THREE.Mesh(
+            new THREE.BoxGeometry(wallThickness, wallHeight, 600),
+            wallMaterial
+        );
+        westWall.position.set(0, wallHeight / 2, 300);
+        westWall.castShadow = true;
+        westWall.receiveShadow = true;
+        this.scene.add(westWall);
+
+        // East wall
+        const eastWall = new THREE.Mesh(
+            new THREE.BoxGeometry(wallThickness, wallHeight, 600),
+            wallMaterial
+        );
+        eastWall.position.set(800, wallHeight / 2, 300);
+        eastWall.castShadow = true;
+        eastWall.receiveShadow = true;
+        this.scene.add(eastWall);
+    }
+
+    createTankMesh(color, size) {
+        const tank = new THREE.Group();
+        const scaleFactor = size / 20; // Base size is 20
+
+        // Tank body
+        const bodyGeometry = new THREE.BoxGeometry(15 * scaleFactor, 8 * scaleFactor, 20 * scaleFactor);
+        const bodyMaterial = new THREE.MeshLambertMaterial({ color: color });
+        const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+        body.position.y = 4 * scaleFactor;
+        body.castShadow = true;
+        body.receiveShadow = true;
+        tank.add(body);
+
+        // Tank turret
+        const turretGeometry = new THREE.CylinderGeometry(
+            5 * scaleFactor,
+            5 * scaleFactor,
+            5 * scaleFactor,
+            8
+        );
+        const turretMaterial = new THREE.MeshLambertMaterial({ color: color });
+        const turret = new THREE.Mesh(turretGeometry, turretMaterial);
+        turret.position.y = 10 * scaleFactor;
+        turret.castShadow = true;
+        turret.receiveShadow = true;
+        tank.add(turret);
+
+        // Tank barrel (gun)
+        const barrelGeometry = new THREE.CylinderGeometry(
+            1 * scaleFactor,
+            1 * scaleFactor,
+            12 * scaleFactor,
+            8
+        );
+        const barrelMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+        const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
+        barrel.rotation.z = Math.PI / 2;
+        barrel.position.y = 10 * scaleFactor;
+        barrel.position.x = 10 * scaleFactor;
+        barrel.castShadow = true;
+        barrel.receiveShadow = true;
+        tank.add(barrel);
+
+        // Store references for later use
+        tank.userData.body = body;
+        tank.userData.turret = turret;
+        tank.userData.barrel = barrel;
+        tank.userData.scaleFactor = scaleFactor;
+
+        return tank;
+    }
+
+    updateTankScale(tank, newSize) {
+        const scaleFactor = newSize / 20;
+        const oldScaleFactor = tank.userData.scaleFactor;
+        const scaleRatio = scaleFactor / oldScaleFactor;
+
+        // Update all parts
+        tank.children.forEach(child => {
+            child.scale.multiplyScalar(scaleRatio);
+            child.position.multiplyScalar(scaleRatio);
+        });
+
+        tank.userData.scaleFactor = scaleFactor;
+    }
+
+    createBulletMesh() {
+        const bulletGeometry = new THREE.SphereGeometry(3, 8, 8);
+        const bulletMaterial = new THREE.MeshLambertMaterial({
+            color: 0xff0000,
+            emissive: 0x660000
+        });
+        const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+        bullet.castShadow = true;
+        return bullet;
+    }
+
+    setupNameModal() {
+        const modal = document.getElementById('name-modal');
+        const nameInput = document.getElementById('player-name-input');
+        const submitBtn = document.getElementById('name-submit-btn');
+
+        const submitName = () => {
+            let name = nameInput.value.trim();
+            if (!name) {
+                name = this.localPlayer.name;
+            }
+
+            this.localPlayer.name = name;
+
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.sendNameChange(name);
+            } else {
+                this.pendingName = name;
+            }
+
+            modal.classList.add('hidden');
+        };
+
+        submitBtn.addEventListener('click', submitName);
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitName();
+            }
+        });
+
+        nameInput.focus();
+    }
+
+    setupWebSocket() {
+        let wsUrl;
+        if (window.GAME_CONFIG && window.GAME_CONFIG.wsUrl) {
+            wsUrl = window.GAME_CONFIG.wsUrl;
+        } else {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.host}/ws`;
+        }
+
+        console.log('Connecting to WebSocket:', wsUrl);
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+            console.log('Connected to server');
+            this.updateStatus('Connected', true);
+
+            if (this.pendingName) {
+                this.sendNameChange(this.pendingName);
+                this.pendingName = null;
+            }
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const message = JSON.parse(event.data);
+                this.handleMessage(message);
+            } catch (error) {
+                console.error('Error parsing message:', error);
+            }
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            this.updateStatus('Connection Error', false);
+            this.showError('Connection error occurred');
+        };
+
+        this.ws.onclose = () => {
+            console.log('Disconnected from server');
+            this.updateStatus('Disconnected', false);
+            this.showError('Disconnected from server. Refresh to reconnect.');
+        };
+    }
+
+    handleMessage(message) {
+        switch (message.type) {
+            case 'init':
+                this.playerId = message.player_id;
+                this.localPlayer = message.player;
+                this.players[this.playerId] = this.localPlayer;
+                this.config = message.config;
+                console.log('Initialized as player:', this.playerId);
+
+                const nameInput = document.getElementById('player-name-input');
+                if (nameInput) {
+                    nameInput.value = this.localPlayer.name;
+                }
+                break;
+
+            case 'state':
+                this.players = message.data.players;
+                this.bullets = message.data.bullets;
+
+                if (this.playerId && this.players[this.playerId]) {
+                    this.localPlayer = this.players[this.playerId];
+                }
+
+                if (message.hits && message.hits.length > 0) {
+                    message.hits.forEach(hit => {
+                        if (hit.player_id === this.playerId) {
+                            this.flashScreen();
+                        }
+                    });
+                }
+                break;
+
+            case 'player_joined':
+                this.players[message.player_id] = message.player;
+                console.log('Player joined:', message.player_id);
+                break;
+
+            case 'player_left':
+                // Remove mesh from scene
+                if (this.playerMeshes[message.player_id]) {
+                    this.scene.remove(this.playerMeshes[message.player_id]);
+                    delete this.playerMeshes[message.player_id];
+                }
+                delete this.players[message.player_id];
+                console.log('Player left:', message.player_id);
+                break;
+
+            case 'bullet_created':
+                this.bullets[message.bullet.id] = message.bullet;
+                break;
+
+            case 'player_name_changed':
+                if (this.players[message.player_id]) {
+                    this.players[message.player_id].name = message.name;
+                    console.log(`Player ${message.player_id} changed name to: ${message.name}`);
+                }
+                break;
+
+            case 'error':
+                this.showError(message.message);
+                break;
+
+            default:
+                console.warn('Unknown message type:', message.type);
+        }
+    }
+
+    setupControls() {
+        // Keyboard controls
+        window.addEventListener('keydown', (e) => {
+            if (e.code in this.keys) {
+                e.preventDefault();
+                this.keys[e.code] = true;
+
+                if (e.code === 'Space') {
+                    this.shoot();
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code in this.keys) {
+                e.preventDefault();
+                this.keys[e.code] = false;
+            }
+        });
+
+        // Mouse control for rotation
+        this.renderer.domElement.addEventListener('mousemove', (e) => {
+            if (!this.playerId) return;
+
+            const rect = this.renderer.domElement.getBoundingClientRect();
+            this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+            // Calculate world position of mouse
+            this.raycaster.setFromCamera(this.mouse, this.camera);
+            const intersects = this.raycaster.intersectObject(this.ground);
+
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                const dx = point.x - this.localPlayer.x;
+                const dz = point.z - this.localPlayer.y;
+                const newAngle = Math.atan2(dz, dx);
+
+                if (this.localPlayer.angle !== newAngle) {
+                    this.localPlayer.angle = newAngle;
+
+                    const now = Date.now();
+                    if (now - this.lastAngleUpdateTime >= this.angleUpdateThrottle) {
+                        this.lastAngleUpdateTime = now;
+                        this.sendAngleUpdate();
+                    }
+                }
+            }
+
+            this.checkPlayerHover(e.clientX, e.clientY);
+        });
+
+        // Click to shoot
+        this.renderer.domElement.addEventListener('click', () => {
+            this.shoot();
+        });
+    }
+
+    startGameLoop() {
+        const loop = () => {
+            this.update();
+            this.render3D();
+            requestAnimationFrame(loop);
+        };
+        requestAnimationFrame(loop);
+    }
+
+    update() {
+        if (!this.playerId || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        let moved = false;
+        const speed = this.config.player_speed;
+
+        if (this.keys.ArrowUp) {
+            this.localPlayer.y -= speed;
+            moved = true;
+        }
+        if (this.keys.ArrowDown) {
+            this.localPlayer.y += speed;
+            moved = true;
+        }
+        if (this.keys.ArrowLeft) {
+            this.localPlayer.x -= speed;
+            moved = true;
+        }
+        if (this.keys.ArrowRight) {
+            this.localPlayer.x += speed;
+            moved = true;
+        }
+
+        this.localPlayer.x = Math.max(0, Math.min(this.config.canvas_width, this.localPlayer.x));
+        this.localPlayer.y = Math.max(0, Math.min(this.config.canvas_height, this.localPlayer.y));
+
+        if (moved) {
+            const now = Date.now();
+            if (now - this.lastPositionUpdateTime >= this.positionUpdateThrottle) {
+                this.lastPositionUpdateTime = now;
+                this.sendUpdate();
+            }
+        }
+    }
+
+    sendUpdate() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        this.ws.send(JSON.stringify({
+            type: 'update',
+            data: {
+                x: this.localPlayer.x,
+                y: this.localPlayer.y,
+                angle: this.localPlayer.angle
+            }
+        }));
+    }
+
+    sendAngleUpdate() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        this.ws.send(JSON.stringify({
+            type: 'update',
+            data: {
+                angle: this.localPlayer.angle
+            }
+        }));
+    }
+
+    sendNameChange(name) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        this.ws.send(JSON.stringify({
+            type: 'change_name',
+            name: name
+        }));
+    }
+
+    shoot() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.playerId) {
+            return;
+        }
+
+        const now = Date.now();
+        if (now - this.lastShootTime < this.shootCooldown) {
+            return;
+        }
+        this.lastShootTime = now;
+
+        this.sendAngleUpdate();
+
+        this.ws.send(JSON.stringify({
+            type: 'shoot'
+        }));
+    }
+
+    checkPlayerHover(screenX, screenY) {
+        const tooltip = document.getElementById('player-tooltip');
+        this.raycaster.setFromCamera(this.mouse, this.camera);
+
+        let hoveredPlayerId = null;
+
+        // Check intersection with player meshes
+        for (const [id, mesh] of Object.entries(this.playerMeshes)) {
+            const intersects = this.raycaster.intersectObject(mesh, true);
+            if (intersects.length > 0 && this.players[id]) {
+                hoveredPlayerId = id;
+                tooltip.textContent = this.players[id].name || id;
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${screenX + 10}px`;
+                tooltip.style.top = `${screenY + 10}px`;
+                break;
+            }
+        }
+
+        if (!hoveredPlayerId) {
+            tooltip.style.display = 'none';
+        }
+
+        this.hoveredPlayer = hoveredPlayerId;
+    }
+
+    render3D() {
+        // Update player meshes
+        for (const [id, player] of Object.entries(this.players)) {
+            if (!this.playerMeshes[id]) {
+                // Create new tank mesh
+                this.playerMeshes[id] = this.createTankMesh(player.color, player.size);
+                this.scene.add(this.playerMeshes[id]);
+            }
+
+            const mesh = this.playerMeshes[id];
+            mesh.position.x = player.x;
+            mesh.position.z = player.y;
+            mesh.rotation.y = -player.angle;
+
+            // Update scale if size changed
+            const expectedScaleFactor = player.size / 20;
+            if (Math.abs(mesh.userData.scaleFactor - expectedScaleFactor) > 0.01) {
+                this.updateTankScale(mesh, player.size);
+            }
+
+            // Highlight local player
+            if (id === this.playerId) {
+                mesh.userData.body.material.emissive = new THREE.Color(0x333333);
+            }
+        }
+
+        // Remove meshes for players that left
+        for (const id in this.playerMeshes) {
+            if (!this.players[id]) {
+                this.scene.remove(this.playerMeshes[id]);
+                delete this.playerMeshes[id];
+            }
+        }
+
+        // Update bullet meshes
+        for (const [id, bullet] of Object.entries(this.bullets)) {
+            if (!this.bulletMeshes[id]) {
+                this.bulletMeshes[id] = this.createBulletMesh();
+                this.scene.add(this.bulletMeshes[id]);
+            }
+
+            const mesh = this.bulletMeshes[id];
+            mesh.position.x = bullet.x;
+            mesh.position.y = 5;
+            mesh.position.z = bullet.y;
+        }
+
+        // Remove meshes for bullets that no longer exist
+        for (const id in this.bulletMeshes) {
+            if (!this.bullets[id]) {
+                this.scene.remove(this.bulletMeshes[id]);
+                delete this.bulletMeshes[id];
+            }
+        }
+
+        // Update UI
+        this.updateUI();
+
+        // Render scene
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    updateUI() {
+        const playerCount = Object.keys(this.players).length;
+        document.getElementById('player-count').textContent = playerCount;
+
+        if (this.localPlayer) {
+            const size = Math.round(this.localPlayer.size);
+            document.getElementById('player-size').textContent = size;
+        }
+    }
+
+    updateStatus(text, connected) {
+        const statusText = document.getElementById('status-text');
+        const statusIndicator = document.querySelector('.connection-status');
+
+        statusText.textContent = text;
+
+        if (connected) {
+            statusIndicator.classList.add('connected');
+        } else {
+            statusIndicator.classList.remove('connected');
+        }
+    }
+
+    showError(message) {
+        const errorElement = document.getElementById('error-message');
+        errorElement.textContent = message;
+        errorElement.classList.add('show');
+
+        setTimeout(() => {
+            errorElement.classList.remove('show');
+        }, 5000);
+    }
+
+    flashScreen() {
+        // Flash the screen red by temporarily changing background
+        const originalColor = this.scene.background;
+        this.scene.background = new THREE.Color(0x330000);
+        setTimeout(() => {
+            this.scene.background = originalColor;
+        }, 100);
+    }
+}
+
+// Initialize game when page loads
+window.addEventListener('DOMContentLoaded', () => {
+    new Game3D();
+});
