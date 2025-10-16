@@ -252,9 +252,9 @@ class Game3D {
             emissive: 0x0a0a0a
         });
         const barrel = new THREE.Mesh(barrelGeometry, barrelMaterial);
-        barrel.rotation.z = Math.PI / 2;
+        barrel.rotation.x = Math.PI / 2;
         barrel.position.y = 14.5 * scaleFactor;
-        barrel.position.x = 14 * scaleFactor;
+        barrel.position.z = -14 * scaleFactor;
         barrel.castShadow = true;
         barrel.receiveShadow = true;
         tank.add(barrel);
@@ -268,9 +268,9 @@ class Game3D {
         );
         const muzzleMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
         const muzzle = new THREE.Mesh(muzzleGeometry, muzzleMaterial);
-        muzzle.rotation.z = Math.PI / 2;
+        muzzle.rotation.x = Math.PI / 2;
         muzzle.position.y = 14.5 * scaleFactor;
-        muzzle.position.x = 24 * scaleFactor;
+        muzzle.position.z = -24 * scaleFactor;
         muzzle.castShadow = true;
         tank.add(muzzle);
 
