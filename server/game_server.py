@@ -30,8 +30,7 @@ PLAYER_SPEED = 5
 BULLET_SPEED = 10
 BULLET_SIZE = 5
 HIT_SIZE_REDUCTION = 10
-RESPAWN_X = CANVAS_WIDTH - 50
-RESPAWN_Y = 50
+RESPAWN_EDGE_MARGIN = 50  # Distance from edge for respawn
 
 
 @dataclass
@@ -68,6 +67,25 @@ class GameState:
         self.connections: Dict[str, web.WebSocketResponse] = {}
         self.bullet_counter = 0
         self.player_counter = 0
+
+    def get_random_edge_position(self) -> tuple:
+        """Generate a random position at the edge of the game area"""
+        edge = random.choice(['top', 'bottom', 'left', 'right'])
+
+        if edge == 'top':
+            x = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_WIDTH - RESPAWN_EDGE_MARGIN)
+            y = RESPAWN_EDGE_MARGIN
+        elif edge == 'bottom':
+            x = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_WIDTH - RESPAWN_EDGE_MARGIN)
+            y = CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN
+        elif edge == 'left':
+            x = RESPAWN_EDGE_MARGIN
+            y = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN)
+        else:  # right
+            x = CANVAS_WIDTH - RESPAWN_EDGE_MARGIN
+            y = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN)
+
+        return x, y
 
     def add_player(self, player_id: str, ws: web.WebSocketResponse) -> Player:
         """Add a new player to the game"""
@@ -216,13 +234,12 @@ class GameState:
             if hit['bullet_id'] in self.bullets:
                 del self.bullets[hit['bullet_id']]
 
-            # Reduce player size and respawn if necessary
+            # Reset player size to initial value and respawn at random edge position
             player = self.players[hit['player_id']]
-            player.size = max(PLAYER_INITIAL_SIZE, player.size - HIT_SIZE_REDUCTION)
+            player.size = PLAYER_INITIAL_SIZE
 
-            # Move player to respawn position
-            player.x = RESPAWN_X
-            player.y = RESPAWN_Y
+            # Move player to random edge position
+            player.x, player.y = self.get_random_edge_position()
 
         return hits
 
