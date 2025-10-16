@@ -1,1 +1,144 @@
-# llm_game
+# LLM Game - Multiplayer Circle Shooter
+
+Браузерная онлайн игра с использованием Python и JavaScript. Игроки отображаются в виде цветных кружков, которые могут двигаться и стрелять друг в друга в режиме реального времени.
+
+Browser-based online multiplayer game using Python and JavaScript. Players are displayed as colored circles that can move and shoot at each other in real-time.
+
+## Features / Особенности
+
+- **Real-time multiplayer** / Многопользовательская игра в реальном времени
+- **WebSocket communication** / WebSocket соединение для синхронизации
+- **Canvas-based rendering** / Рендеринг через Canvas
+- **Player growth mechanics** / Механика роста персонажа
+- **Shooting and collision detection** / Стрельба и определение столкновений
+- **Session limit** / Ограничение количества сессий (до 50 игроков)
+- **Respawn system** / Система возрождения при попадании
+
+## Game Mechanics / Игровая механика
+
+- Players are represented as colored circles with a gun indicator / Игроки - цветные кружки с индикатором оружия
+- Move using arrow keys / Управление стрелками клавиатуры
+- Shoot with space bar or mouse click / Стрельба клавишей пробел или кликом мыши
+- Aim with mouse / Прицеливание мышью
+- Player size gradually increases over time / Размер игрока постепенно увеличивается
+- Getting hit reduces size and respawns player in upper-right corner / Попадание уменьшает размер и переносит в правый верхний угол
+- Bullets are small red circles / Пули - маленькие красные кружки
+
+## Requirements / Требования
+
+- Python 3.7+
+- aiohttp
+
+## Installation / Установка
+
+1. Clone the repository / Клонировать репозиторий:
+```bash
+git clone https://github.com/andchir/llm_game.git
+cd llm_game
+```
+
+2. Install dependencies / Установить зависимости:
+```bash
+pip install -r requirements.txt
+```
+
+## Running the Game / Запуск игры
+
+1. Start the server / Запустить сервер:
+```bash
+python server/game_server.py
+```
+
+2. Open your browser and navigate to / Откройте браузер и перейдите по адресу:
+```
+http://localhost:8080
+```
+
+3. Open multiple browser windows/tabs to test multiplayer / Откройте несколько окон/вкладок браузера для тестирования многопользовательского режима
+
+## Controls / Управление
+
+- **Arrow Keys** / **Стрелки**: Move your circle / Движение кружка
+- **Space Bar** or **Mouse Click** / **Пробел** или **Клик мыши**: Shoot / Выстрел
+- **Mouse Movement** / **Движение мыши**: Aim / Прицеливание
+
+## Configuration / Конфигурация
+
+Game parameters can be adjusted in `server/game_server.py`:
+
+Параметры игры можно настроить в `server/game_server.py`:
+
+- `MAX_SESSIONS`: Maximum number of concurrent players (default: 50) / Максимальное количество игроков
+- `CANVAS_WIDTH`, `CANVAS_HEIGHT`: Game area size / Размер игровой области
+- `PLAYER_INITIAL_SIZE`: Starting player size / Начальный размер игрока
+- `PLAYER_MAX_SIZE`: Maximum player size / Максимальный размер игрока
+- `PLAYER_GROWTH_RATE`: How fast players grow / Скорость роста игрока
+- `PLAYER_SPEED`: Movement speed / Скорость движения
+- `BULLET_SPEED`: Bullet velocity / Скорость пуль
+- `HIT_SIZE_REDUCTION`: Size reduction on hit / Уменьшение размера при попадании
+
+## Project Structure / Структура проекта
+
+```
+llm_game/
+├── server/
+│   └── game_server.py      # Python WebSocket server / Сервер на Python
+├── static/
+│   ├── index.html          # Game HTML page / HTML страница игры
+│   └── game.js             # Client-side game logic / Клиентская логика
+├── examples/               # Example and test scripts / Примеры и тесты
+├── experiments/            # Experimental code / Экспериментальный код
+├── requirements.txt        # Python dependencies / Зависимости Python
+└── README.md              # This file / Этот файл
+```
+
+## Architecture / Архитектура
+
+### Server Side / Серверная часть
+
+- **Python aiohttp server** with WebSocket support / Сервер на Python с поддержкой WebSocket
+- **GameState class**: Manages players, bullets, and game logic / Управляет игроками, пулями и игровой логикой
+- **Game loop**: Runs at 30 FPS, updates positions, checks collisions / Цикл игры на 30 FPS
+- **Session management**: In-memory storage with configurable limit / Управление сессиями в памяти
+
+### Client Side / Клиентская часть
+
+- **Canvas rendering**: All game objects drawn on HTML5 Canvas / Рендеринг через Canvas
+- **WebSocket client**: Real-time communication with server / WebSocket для связи с сервером
+- **Input handling**: Keyboard and mouse controls / Обработка клавиатуры и мыши
+- **Smooth rendering**: RequestAnimationFrame for fluid animation / Плавная анимация
+
+## Development / Разработка
+
+### Running Tests / Запуск тестов
+
+Test scripts are available in the `examples/` directory / Тестовые скрипты в папке `examples/`
+
+### Adding Features / Добавление функций
+
+1. Server logic: Modify `server/game_server.py` / Логика сервера
+2. Client rendering: Modify `static/game.js` / Рендеринг клиента
+3. UI changes: Modify `static/index.html` / Изменения UI
+
+## Troubleshooting / Устранение неполадок
+
+### Server won't start / Сервер не запускается
+- Check if port 8080 is available / Проверьте, свободен ли порт 8080
+- Ensure Python 3.7+ is installed / Убедитесь, что установлен Python 3.7+
+- Verify all dependencies are installed / Проверьте установку зависимостей
+
+### Can't connect to game / Не удается подключиться
+- Check browser console for errors / Проверьте консоль браузера
+- Verify server is running / Убедитесь, что сервер запущен
+- Try accessing `http://localhost:8080` / Попробуйте открыть `http://localhost:8080`
+
+### Lag or stuttering / Задержки или подтормаживания
+- Reduce number of connected players / Уменьшите количество игроков
+- Check network connection / Проверьте сетевое соединение
+- Lower game loop FPS in `game_server.py` / Понизьте FPS в `game_server.py`
+
+## License / Лицензия
+
+This project is open source and available under the MIT License.
+
+Этот проект имеет открытый исходный код и доступен по лицензии MIT.
