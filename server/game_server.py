@@ -305,8 +305,8 @@ async def game_loop():
                 'hits': hits
             })
 
-            # Run at ~30 FPS
-            await asyncio.sleep(1/30)
+            # Run at ~60 FPS for smoother movement
+            await asyncio.sleep(1/60)
 
         except Exception as e:
             logger.error(f"Error in game loop: {e}")
