@@ -110,6 +110,21 @@ llm_game/
 
 ## Production Deployment / Развертывание в production
 
+### Option 1: GitHub Actions + Pages (Recommended for Demo)
+
+For automated deployment using GitHub Actions and GitHub Pages, see [GITHUB_ACTIONS_DEPLOYMENT.md](GITHUB_ACTIONS_DEPLOYMENT.md).
+
+Для автоматического развертывания с GitHub Actions и GitHub Pages, см. [GITHUB_ACTIONS_DEPLOYMENT.md](GITHUB_ACTIONS_DEPLOYMENT.md).
+
+**Quick overview / Краткий обзор:**
+- GitHub Actions workflow included / Включен GitHub Actions workflow
+- Frontend deployment to GitHub Pages / Развертывание frontend на GitHub Pages
+- Backend deployment to free services (Render, Railway, Fly.io) / Развертывание backend на бесплатные сервисы
+- Configurable WebSocket URL / Настраиваемый WebSocket URL
+- Step-by-step deployment guide / Пошаговое руководство по развертыванию
+
+### Option 2: Ubuntu Server with systemd (For Production)
+
 For detailed instructions on deploying to a production Ubuntu server with systemd, see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 Для подробных инструкций по развертыванию на production Ubuntu сервере с systemd, см. [DEPLOYMENT.md](DEPLOYMENT.md).

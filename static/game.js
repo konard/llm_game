@@ -84,9 +84,16 @@ class Game {
     }
 
     setupWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws`;
+        // Use configured WebSocket URL if available, otherwise use default
+        let wsUrl;
+        if (window.GAME_CONFIG && window.GAME_CONFIG.wsUrl) {
+            wsUrl = window.GAME_CONFIG.wsUrl;
+        } else {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            wsUrl = `${protocol}//${window.location.host}/ws`;
+        }
 
+        console.log('Connecting to WebSocket:', wsUrl);
         this.ws = new WebSocket(wsUrl);
 
         this.ws.onopen = () => {
