@@ -35,6 +35,8 @@ class Game {
         this.shootCooldown = 250; // milliseconds
         this.lastAngleUpdateTime = 0;
         this.angleUpdateThrottle = 50; // milliseconds - send angle updates max 20 times per second
+        this.lastPositionUpdateTime = 0;
+        this.positionUpdateThrottle = 50; // milliseconds - send position updates max 20 times per second
 
         this.init();
     }
@@ -292,9 +294,13 @@ class Game {
         this.localPlayer.x = Math.max(0, Math.min(this.config.canvas_width, this.localPlayer.x));
         this.localPlayer.y = Math.max(0, Math.min(this.config.canvas_height, this.localPlayer.y));
 
-        // Send update to server if moved or angle changed
+        // Send update to server if moved, but throttle to avoid overwhelming the network
         if (moved) {
-            this.sendUpdate();
+            const now = Date.now();
+            if (now - this.lastPositionUpdateTime >= this.positionUpdateThrottle) {
+                this.lastPositionUpdateTime = now;
+                this.sendUpdate();
+            }
         }
     }
 
