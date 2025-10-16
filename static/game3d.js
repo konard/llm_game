@@ -544,7 +544,9 @@ class Game3D {
                 const point = intersects[0].point;
                 const dx = point.x - this.localPlayer.x;
                 const dz = point.z - this.localPlayer.y;
-                const newAngle = Math.atan2(dz, dx);
+                // Adjust angle by -π/2 because the tank barrel points along negative Z-axis
+                // when rotation.y = 0, but atan2(dz, dx) assumes pointing along positive X-axis
+                const newAngle = Math.atan2(dz, dx) - Math.PI / 2;
 
                 if (this.localPlayer.angle !== newAngle) {
                     this.localPlayer.angle = newAngle;
