@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Throttling Test</title>
+    <style>
+        body {
+            font-family: monospace;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+        #log {
+            height: 400px;
+            overflow-y: scroll;
+            border: 1px solid #4CAF50;
+            padding: 10px;
+            margin-top: 20px;
+            background-color: #0a0a0a;
+        }
+        .throttled {
+            color: #4CAF50;
+        }
+        .skipped {
+            color: #888;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <h1>Position Update Throttling Test</h1>
+    <p>This test simulates the throttling mechanism used in the game.</p>
+    <p>Press and hold the button to simulate continuous movement.</p>
+
+    <button id="moveBtn">Simulate Movement (Hold Me)</button>
+    <button id="clearBtn">Clear Log</button>
+
+    <p>Stats:</p>
+    <div>Total attempts: <span id="totalAttempts">0</span></div>
+    <div>Messages sent: <span id="messagesSent">0</span></div>
+    <div>Messages skipped: <span id="messagesSkipped">0</span></div>
+    <div>Throttle rate: <span id="throttleRate">0</span> msg/sec</div>
+
+    <div id="log"></div>
+
+    <script>
+        let lastPositionUpdateTime = 0;
+        const positionUpdateThrottle = 50; // 50ms = 20 times per second
+        let totalAttempts = 0;
+        let messagesSent = 0;
+        let messagesSkipped = 0;
+        let startTime = Date.now();
+
+        const log = document.getElementById('log');
+        const moveBtn = document.getElementById('moveBtn');
+        const clearBtn = document.getElementById('clearBtn');
+
+        function addLog(message, className) {
+            const entry = document.createElement('div');
+            entry.className = className;
+            entry.textContent = `[${new Date().toISOString().substr(11, 12)}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function updateStats() {
+            document.getElementById('totalAttempts').textContent = totalAttempts;
+            document.getElementById('messagesSent').textContent = messagesSent;
+            document.getElementById('messagesSkipped').textContent = messagesSkipped;
+
+            const elapsed = (Date.now() - startTime) / 1000;
+            const rate = elapsed > 0 ? (messagesSent / elapsed).toFixed(2) : 0;
+            document.getElementById('throttleRate').textContent = rate;
+        }
+
+        function simulatePositionUpdate() {
+            totalAttempts++;
+            const now = Date.now();
+
+            if (now - lastPositionUpdateTime >= positionUpdateThrottle) {
+                lastPositionUpdateTime = now;
+                messagesSent++;
+                addLog(`✓ Position update SENT (${messagesSent})`, 'throttled');
+            } else {
+                messagesSkipped++;
+                const timeUntilNext = positionUpdateThrottle - (now - lastPositionUpdateTime);
+                addLog(`✗ Position update SKIPPED (wait ${timeUntilNext}ms)`, 'skipped');
+            }
+
+            updateStats();
+        }
+
+        let intervalId = null;
+
+        moveBtn.addEventListener('mousedown', () => {
+            addLog('=== Started simulating movement ===', 'throttled');
+            startTime = Date.now();
+            // Simulate game loop running at ~60 FPS
+            intervalId = setInterval(simulatePositionUpdate, 1000/60);
+        });
+
+        moveBtn.addEventListener('mouseup', () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+                addLog('=== Stopped simulating movement ===', 'throttled');
+            }
+        });
+
+        moveBtn.addEventListener('mouseleave', () => {
+            if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+                addLog('=== Stopped simulating movement ===', 'throttled');
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            log.innerHTML = '';
+            totalAttempts = 0;
+            messagesSent = 0;
+            messagesSkipped = 0;
+            startTime = Date.now();
+            updateStats();
+        });
+
+        addLog('Ready! Press and hold the button to simulate movement.', 'throttled');
+    </script>
+</body>
+</html>
