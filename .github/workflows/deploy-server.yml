@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - 'issue-**'  # Allow testing on issue branches
     paths:
       - 'server/**'
       - 'requirements.txt'
