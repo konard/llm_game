@@ -41,6 +41,11 @@ class Game3D {
         this.mouse = { x: 0, y: 0 };
         this.raycaster = new THREE.Raycaster();
 
+        // Click/tap to move state
+        this.targetPosition = null;
+        this.lastClickTime = 0;
+        this.doubleClickThreshold = 300; // milliseconds for double click/tap detection
+
         // Interpolation state for smooth movement
         this.playerInterpolation = {}; // Stores interpolation data for each remote player
         this.lastFrameTime = performance.now();
@@ -562,9 +567,62 @@ class Game3D {
             this.checkPlayerHover(e.clientX, e.clientY);
         });
 
-        // Click to shoot
-        this.renderer.domElement.addEventListener('click', () => {
-            this.shoot();
+        // Click/tap to move, double-click/tap to shoot
+        this.renderer.domElement.addEventListener('click', (e) => {
+            const now = Date.now();
+            const timeSinceLastClick = now - this.lastClickTime;
+
+            if (timeSinceLastClick < this.doubleClickThreshold) {
+                // Double click - shoot
+                this.shoot();
+                this.lastClickTime = 0; // Reset to prevent triple-click issues
+                this.targetPosition = null; // Cancel movement on shoot
+            } else {
+                // Single click - set target position to move towards
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                // Calculate world position
+                this.raycaster.setFromCamera({ x: mouseX, y: mouseY }, this.camera);
+                const intersects = this.raycaster.intersectObject(this.ground);
+
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    this.targetPosition = { x: point.x, y: point.z };
+                    this.lastClickTime = now;
+                }
+            }
+        });
+
+        // Touch events for mobile
+        this.renderer.domElement.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const now = Date.now();
+            const timeSinceLastClick = now - this.lastClickTime;
+
+            if (timeSinceLastClick < this.doubleClickThreshold) {
+                // Double tap - shoot
+                this.shoot();
+                this.lastClickTime = 0;
+                this.targetPosition = null;
+            } else {
+                // Single tap - set target position
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                const touch = e.touches[0];
+                const touchX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+                const touchY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+
+                // Calculate world position
+                this.raycaster.setFromCamera({ x: touchX, y: touchY }, this.camera);
+                const intersects = this.raycaster.intersectObject(this.ground);
+
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    this.targetPosition = { x: point.x, y: point.z };
+                    this.lastClickTime = now;
+                }
+            }
         });
     }
 
@@ -630,21 +688,53 @@ class Game3D {
         let moved = false;
         const speed = this.config.player_speed;
 
+        // Keyboard movement (takes priority)
+        let keyboardMovement = false;
         if (this.keys.ArrowUp) {
             this.localPlayer.y -= speed;
             moved = true;
+            keyboardMovement = true;
         }
         if (this.keys.ArrowDown) {
             this.localPlayer.y += speed;
             moved = true;
+            keyboardMovement = true;
         }
         if (this.keys.ArrowLeft) {
             this.localPlayer.x -= speed;
             moved = true;
+            keyboardMovement = true;
         }
         if (this.keys.ArrowRight) {
             this.localPlayer.x += speed;
             moved = true;
+            keyboardMovement = true;
+        }
+
+        // If keyboard is used, cancel target position
+        if (keyboardMovement) {
+            this.targetPosition = null;
+        }
+
+        // Handle click/tap to move
+        if (this.targetPosition && !keyboardMovement) {
+            const dx = this.targetPosition.x - this.localPlayer.x;
+            const dy = this.targetPosition.y - this.localPlayer.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // If we're close enough to target, stop moving
+            if (distance < speed) {
+                this.localPlayer.x = this.targetPosition.x;
+                this.localPlayer.y = this.targetPosition.y;
+                this.targetPosition = null;
+                moved = true;
+            } else {
+                // Move towards target
+                const angle = Math.atan2(dy, dx);
+                this.localPlayer.x += Math.cos(angle) * speed;
+                this.localPlayer.y += Math.sin(angle) * speed;
+                moved = true;
+            }
         }
 
         this.localPlayer.x = Math.max(0, Math.min(this.config.canvas_width, this.localPlayer.x));
