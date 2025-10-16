@@ -38,6 +38,7 @@ RESPAWN_Y = 50
 class Player:
     """Represents a player in the game"""
     id: str
+    name: str
     x: float
     y: float
     angle: float
@@ -66,11 +67,16 @@ class GameState:
         self.bullets: Dict[str, Bullet] = {}
         self.connections: Dict[str, web.WebSocketResponse] = {}
         self.bullet_counter = 0
+        self.player_counter = 0
 
     def add_player(self, player_id: str, ws: web.WebSocketResponse) -> Player:
         """Add a new player to the game"""
         if len(self.players) >= MAX_SESSIONS:
             raise ValueError("Server is full")
+
+        # Generate default player name
+        self.player_counter += 1
+        default_name = f"player{self.player_counter}"
 
         # Random spawn position and color
         x = random.uniform(100, CANVAS_WIDTH - 100)
@@ -79,6 +85,7 @@ class GameState:
 
         player = Player(
             id=player_id,
+            name=default_name,
             x=x,
             y=y,
             angle=0,
@@ -89,7 +96,7 @@ class GameState:
 
         self.players[player_id] = player
         self.connections[player_id] = ws
-        logger.info(f"Player {player_id} joined. Total players: {len(self.players)}")
+        logger.info(f"Player {player_id} ({default_name}) joined. Total players: {len(self.players)}")
         return player
 
     def remove_player(self, player_id: str):
@@ -115,6 +122,20 @@ class GameState:
             player.angle = data['angle']
 
         player.last_update = time.time()
+
+    def update_player_name(self, player_id: str, name: str):
+        """Update player name"""
+        if player_id not in self.players:
+            return False
+
+        # Validate and sanitize name
+        name = name.strip()
+        if not name or len(name) > 20:
+            return False
+
+        self.players[player_id].name = name
+        logger.info(f"Player {player_id} changed name to: {name}")
+        return True
 
     def create_bullet(self, player_id: str):
         """Create a bullet from a player"""
@@ -329,6 +350,21 @@ async def websocket_handler(request):
                             await game.broadcast({
                                 'type': 'bullet_created',
                                 'bullet': asdict(bullet)
+                            })
+
+                    elif msg_type == 'change_name':
+                        new_name = data.get('name', '')
+                        if game.update_player_name(player_id, new_name):
+                            # Broadcast name change to all players
+                            await game.broadcast({
+                                'type': 'player_name_changed',
+                                'player_id': player_id,
+                                'name': new_name
+                            })
+                        else:
+                            await ws.send_json({
+                                'type': 'error',
+                                'message': 'Invalid name'
                             })
 
                 except json.JSONDecodeError:
