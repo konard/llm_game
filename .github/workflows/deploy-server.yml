@@ -8,8 +8,14 @@ on:
     paths:
       - 'server/**'
       - 'requirements.txt'
+      - 'Dockerfile'
+      - '.dockerignore'
       - '.github/workflows/deploy-server.yml'
   workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   test:
@@ -39,9 +45,100 @@ jobs:
           timeout 5s python server/game_server.py || code=$?; if [[ $code -ne 124 && $code -ne 0 ]]; then exit $code; fi
           echo "Server started successfully"
 
+  build-and-push:
+    name: Build and Push Docker Image
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Display container information
+        run: |
+          echo "## 🐳 Docker Container Built Successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "The server has been packaged into a Docker container and pushed to GitHub Container Registry." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Container Details" >> $GITHUB_STEP_SUMMARY
+          echo "- **Registry**: ghcr.io" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tags**: \`latest\`, \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Quick Deploy Options" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 1: Run Locally with Docker" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 2: Deploy to Render.com (from GitHub Container Registry)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to https://render.com" >> $GITHUB_STEP_SUMMARY
+          echo "2. New → Web Service → Deploy an existing image" >> $GITHUB_STEP_SUMMARY
+          echo "3. Image URL: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "4. Port: 8080" >> $GITHUB_STEP_SUMMARY
+          echo "5. Deploy!" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 3: Deploy to Railway.app" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "1. Go to https://railway.app" >> $GITHUB_STEP_SUMMARY
+          echo "2. New Project → Deploy from Registry" >> $GITHUB_STEP_SUMMARY
+          echo "3. Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "4. Auto-deploys on new images!" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Option 4: Deploy to Fly.io" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "# Create fly.toml with image reference" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl launch --image ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "flyctl deploy" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📝 Notes" >> $GITHUB_STEP_SUMMARY
+          echo "- Container is automatically rebuilt on every push to main branch" >> $GITHUB_STEP_SUMMARY
+          echo "- Image is publicly accessible from GitHub Container Registry" >> $GITHUB_STEP_SUMMARY
+          echo "- Server listens on port set by \`PORT\` environment variable (default: 8080)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📚 Full documentation: [DOCKER_DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/DOCKER_DEPLOYMENT.md)" >> $GITHUB_STEP_SUMMARY
+
   deploy-render:
     name: Deploy to Render (Optional)
-    needs: test
+    needs: build-and-push
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
@@ -52,106 +149,9 @@ jobs:
           if [ -n "$RENDER_HOOK" ]; then
             echo "Triggering deployment to Render.com..."
             curl -X POST "$RENDER_HOOK"
-            echo "Deployment triggered on Render.com"
+            echo "✅ Deployment triggered on Render.com"
           else
-            echo "RENDER_DEPLOY_HOOK_URL not configured. Skipping automatic deployment."
-            echo "See deployment instructions below."
+            echo "ℹ️  RENDER_DEPLOY_HOOK_URL not configured. Skipping automatic deployment."
+            echo "   You can deploy manually using the Docker image from GitHub Container Registry."
           fi
         continue-on-error: true
-
-      - name: Deployment instructions
-        run: |
-          echo "=========================================="
-          echo "Python Server Deployment Instructions"
-          echo "=========================================="
-          echo ""
-          echo "The server code has been tested successfully!"
-          echo ""
-          echo "To deploy your server, choose one of these options:"
-          echo ""
-          echo "1. RENDER.COM (Recommended for auto-deployment via GitHub Actions):"
-          echo "   - Create a Web Service on https://render.com"
-          echo "   - Connect your GitHub repository"
-          echo "   - Set Build Command: pip install -r requirements.txt"
-          echo "   - Set Start Command: python server/game_server.py"
-          echo "   - Copy the Deploy Hook URL from Settings"
-          echo "   - Add it as a secret 'RENDER_DEPLOY_HOOK_URL' in your GitHub repo"
-          echo "   - Future pushes will automatically deploy!"
-          echo ""
-          echo "2. RAILWAY.APP (Easiest setup):"
-          echo "   - Visit https://railway.app"
-          echo "   - Click 'New Project' → 'Deploy from GitHub repo'"
-          echo "   - Select your repository"
-          echo "   - Railway auto-detects Python and deploys automatically"
-          echo ""
-          echo "3. FLY.IO (Best for global distribution):"
-          echo "   - Install flyctl: https://fly.io/docs/hands-on/install-flyctl/"
-          echo "   - Run: flyctl launch"
-          echo "   - Configure and deploy: flyctl deploy"
-          echo ""
-          echo "4. HEROKU (Classic platform):"
-          echo "   - Install Heroku CLI: https://devcenter.heroku.com/articles/heroku-cli"
-          echo "   - Create Procfile: web: python server/game_server.py"
-          echo "   - Run: heroku create && git push heroku main"
-          echo ""
-          echo "=========================================="
-          echo "After deployment, update static/config.js with your server URL!"
-          echo "=========================================="
-
-  build-info:
-    name: Build Information
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Display deployment information
-        run: |
-          echo "## Deployment Information" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ Server tests passed successfully!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Server Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Port**: Configurable via PORT environment variable (default: 8080)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Dependencies**: aiohttp, websockets" >> $GITHUB_STEP_SUMMARY
-          echo "- **Python Version**: 3.7+" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Quick Deploy Options" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Option 1: Render.com (Recommended)" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "1. Go to https://render.com" >> $GITHUB_STEP_SUMMARY
-          echo "2. New → Web Service" >> $GITHUB_STEP_SUMMARY
-          echo "3. Connect GitHub repo: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
-          echo "4. Build Command: pip install -r requirements.txt" >> $GITHUB_STEP_SUMMARY
-          echo "5. Start Command: python server/game_server.py" >> $GITHUB_STEP_SUMMARY
-          echo "6. Deploy!" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "#### Option 2: Railway.app" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "1. Go to https://railway.app" >> $GITHUB_STEP_SUMMARY
-          echo "2. New Project → Deploy from GitHub" >> $GITHUB_STEP_SUMMARY
-          echo "3. Select repository: ${{ github.repository }}" >> $GITHUB_STEP_SUMMARY
-          echo "4. Auto-deploys!" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Automatic Deployment with Render.com" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "To enable automatic deployment via GitHub Actions:" >> $GITHUB_STEP_SUMMARY
-          echo "1. Create your Web Service on Render.com" >> $GITHUB_STEP_SUMMARY
-          echo "2. Go to Settings → Deploy Hook" >> $GITHUB_STEP_SUMMARY
-          echo "3. Copy the Deploy Hook URL" >> $GITHUB_STEP_SUMMARY
-          echo "4. Add it as a GitHub secret named \`RENDER_DEPLOY_HOOK_URL\`" >> $GITHUB_STEP_SUMMARY
-          echo "5. Push to main branch - deployment happens automatically!" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### After Deployment" >> $GITHUB_STEP_SUMMARY
-          echo "Update \`static/config.js\` with your server URL:" >> $GITHUB_STEP_SUMMARY
-          echo '```javascript' >> $GITHUB_STEP_SUMMARY
-          echo "window.GAME_CONFIG = {" >> $GITHUB_STEP_SUMMARY
-          echo "  wsUrl: 'wss://your-server-url.onrender.com/ws'," >> $GITHUB_STEP_SUMMARY
-          echo "};" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "📚 Full documentation: [GITHUB_ACTIONS_DEPLOYMENT.md](https://github.com/${{ github.repository }}/blob/main/GITHUB_ACTIONS_DEPLOYMENT.md)" >> $GITHUB_STEP_SUMMARY
