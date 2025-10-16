@@ -45,7 +45,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to Render
-        if: secrets.RENDER_DEPLOY_HOOK_URL != ''
+        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
         run: |
           curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
           echo "Deployment triggered on Render.com"
