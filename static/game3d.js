@@ -431,19 +431,37 @@ class Game3D {
                 // Use buffered interpolation for smooth movement
                 const currentTime = performance.now();
 
-                // Add server updates to buffer with timestamp
+                // Update bullets directly (no interpolation needed)
+                this.bullets = message.data.bullets;
+
+                // Process each player in the server update
                 for (const [id, newPlayerData] of Object.entries(message.data.players)) {
-                    // Skip local player - no interpolation needed
-                    if (id === this.playerId) {
-                        continue;
+                    // Add or update player in our local state
+                    if (!this.players[id]) {
+                        this.players[id] = { ...newPlayerData };
                     }
 
+                    // Update non-positional properties for all players
+                    this.players[id].size = newPlayerData.size;
+                    this.players[id].color = newPlayerData.color;
+                    this.players[id].name = newPlayerData.name;
+
+                    // For local player, update position directly from server (authoritative)
+                    if (id === this.playerId) {
+                        this.players[id].x = newPlayerData.x;
+                        this.players[id].y = newPlayerData.y;
+                        this.players[id].angle = newPlayerData.angle;
+                        this.localPlayer = this.players[id];
+                        continue; // Skip interpolation setup for local player
+                    }
+
+                    // For remote players, add to interpolation buffer
                     // Initialize buffer for new players
                     if (!this.playerUpdateBuffer[id]) {
                         this.playerUpdateBuffer[id] = [];
                     }
 
-                    // Add update to buffer with server timestamp
+                    // Add update to buffer with timestamp
                     this.playerUpdateBuffer[id].push({
                         x: newPlayerData.x,
                         y: newPlayerData.y,
@@ -463,17 +481,14 @@ class Game3D {
                             currentY: newPlayerData.y,
                             currentAngle: newPlayerData.angle
                         };
+                        // Set initial position immediately for new players
+                        this.players[id].x = newPlayerData.x;
+                        this.players[id].y = newPlayerData.y;
+                        this.players[id].angle = newPlayerData.angle;
                     }
                 }
 
-                // Update local player and bullets directly
-                this.players = message.data.players;
-                this.bullets = message.data.bullets;
-
-                if (this.playerId && this.players[this.playerId]) {
-                    this.localPlayer = this.players[this.playerId];
-                }
-
+                // Handle hits
                 if (message.hits && message.hits.length > 0) {
                     message.hits.forEach(hit => {
                         if (hit.player_id === this.playerId) {
