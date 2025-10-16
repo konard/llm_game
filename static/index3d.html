@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Circle Shooter Game</title>
+    <title>Multiplayer 3D Tank Shooter Game</title>
     <style>
         * {
             margin: 0;
@@ -225,11 +225,12 @@
 </head>
 <body>
     <div id="version-switcher">
-        <a href="/static/index3d.html">Switch to 3D Version</a>
+        <a href="/static/index.html">Switch to 2D Version</a>
     </div>
+
     <div id="name-modal">
         <div class="modal-content">
-            <h2>Добро пожаловать!</h2>
+            <h2>Добро пожаловать в 3D!</h2>
             <p>Введите ваше имя:</p>
             <input type="text" id="player-name-input" maxlength="20" placeholder="Ваше имя">
             <br>
@@ -257,19 +258,21 @@
             </div>
         </div>
 
-        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div id="game-canvas-container" style="width: 800px; height: 600px;"></div>
 
         <div class="error-message" id="error-message"></div>
 
         <div id="controls">
             <h3>Controls</h3>
-            <p><strong>Arrow Keys:</strong> Move your circle</p>
-            <p><strong>Space:</strong> Shoot</p>
+            <p><strong>Arrow Keys:</strong> Move your tank</p>
+            <p><strong>Space or Click:</strong> Shoot</p>
+            <p><strong>Mouse:</strong> Aim your tank</p>
             <p><strong>Goal:</strong> Shoot other players to make them shrink and respawn. Avoid getting hit!</p>
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="/static/config.js"></script>
-    <script src="/static/game.js"></script>
+    <script src="/static/game3d.js"></script>
 </body>
 </html>
