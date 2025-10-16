@@ -45,10 +45,17 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Deploy to Render
-        if: ${{ secrets.RENDER_DEPLOY_HOOK_URL != '' }}
+        env:
+          RENDER_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-          echo "Deployment triggered on Render.com"
+          if [ -n "$RENDER_HOOK" ]; then
+            echo "Triggering deployment to Render.com..."
+            curl -X POST "$RENDER_HOOK"
+            echo "Deployment triggered on Render.com"
+          else
+            echo "RENDER_DEPLOY_HOOK_URL not configured. Skipping automatic deployment."
+            echo "See deployment instructions below."
+          fi
         continue-on-error: true
 
       - name: Deployment instructions
