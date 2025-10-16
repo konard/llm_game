@@ -15,8 +15,10 @@ class Game {
             y: 0,
             angle: 0,
             size: 20,
-            color: '#ffffff'
+            color: '#ffffff',
+            name: 'player'
         };
+        this.hoveredPlayer = null;
         this.keys = {
             ArrowUp: false,
             ArrowDown: false,
@@ -38,9 +40,47 @@ class Game {
     }
 
     init() {
+        this.setupNameModal();
         this.setupWebSocket();
         this.setupControls();
         this.startGameLoop();
+    }
+
+    setupNameModal() {
+        const modal = document.getElementById('name-modal');
+        const nameInput = document.getElementById('player-name-input');
+        const submitBtn = document.getElementById('name-submit-btn');
+
+        const submitName = () => {
+            let name = nameInput.value.trim();
+            if (!name) {
+                name = this.localPlayer.name; // Use default name if empty
+            }
+
+            // Update local player name
+            this.localPlayer.name = name;
+
+            // Send name to server when connected
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.sendNameChange(name);
+            } else {
+                // Store name to send after connection
+                this.pendingName = name;
+            }
+
+            // Hide modal
+            modal.classList.add('hidden');
+        };
+
+        submitBtn.addEventListener('click', submitName);
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitName();
+            }
+        });
+
+        // Focus input when modal is shown
+        nameInput.focus();
     }
 
     setupWebSocket() {
@@ -52,6 +92,12 @@ class Game {
         this.ws.onopen = () => {
             console.log('Connected to server');
             this.updateStatus('Connected', true);
+
+            // Send pending name if available
+            if (this.pendingName) {
+                this.sendNameChange(this.pendingName);
+                this.pendingName = null;
+            }
         };
 
         this.ws.onmessage = (event) => {
@@ -84,6 +130,12 @@ class Game {
                 this.players[this.playerId] = this.localPlayer;
                 this.config = message.config;
                 console.log('Initialized as player:', this.playerId);
+
+                // Set default name in the input field
+                const nameInput = document.getElementById('player-name-input');
+                if (nameInput) {
+                    nameInput.value = this.localPlayer.name;
+                }
                 break;
 
             case 'state':
@@ -117,6 +169,13 @@ class Game {
 
             case 'bullet_created':
                 this.bullets[message.bullet.id] = message.bullet;
+                break;
+
+            case 'player_name_changed':
+                if (this.players[message.player_id]) {
+                    this.players[message.player_id].name = message.name;
+                    console.log(`Player ${message.player_id} changed name to: ${message.name}`);
+                }
                 break;
 
             case 'error':
@@ -176,6 +235,9 @@ class Game {
                     this.sendAngleUpdate();
                 }
             }
+
+            // Check if mouse is over any player to show tooltip
+            this.checkPlayerHover(mouseX, mouseY, e.clientX, e.clientY);
         });
 
         // Click to shoot
@@ -257,6 +319,17 @@ class Game {
         }));
     }
 
+    sendNameChange(name) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        this.ws.send(JSON.stringify({
+            type: 'change_name',
+            name: name
+        }));
+    }
+
     shoot() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.playerId) {
             return;
@@ -276,6 +349,35 @@ class Game {
         this.ws.send(JSON.stringify({
             type: 'shoot'
         }));
+    }
+
+    checkPlayerHover(canvasX, canvasY, screenX, screenY) {
+        const tooltip = document.getElementById('player-tooltip');
+        let hoveredPlayerId = null;
+
+        // Check if mouse is over any player
+        for (const [id, player] of Object.entries(this.players)) {
+            const dx = canvasX - player.x;
+            const dy = canvasY - player.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance <= player.size) {
+                hoveredPlayerId = id;
+                // Show tooltip with player name
+                tooltip.textContent = player.name || id;
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${screenX + 10}px`;
+                tooltip.style.top = `${screenY + 10}px`;
+                break;
+            }
+        }
+
+        // Hide tooltip if not hovering over any player
+        if (!hoveredPlayerId) {
+            tooltip.style.display = 'none';
+        }
+
+        this.hoveredPlayer = hoveredPlayerId;
     }
 
     render() {
