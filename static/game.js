@@ -31,6 +31,8 @@ class Game {
         };
         this.lastShootTime = 0;
         this.shootCooldown = 250; // milliseconds
+        this.lastAngleUpdateTime = 0;
+        this.angleUpdateThrottle = 50; // milliseconds - send angle updates max 20 times per second
 
         this.init();
     }
@@ -161,7 +163,19 @@ class Game {
             // Calculate angle from player to mouse
             const dx = mouseX - this.localPlayer.x;
             const dy = mouseY - this.localPlayer.y;
-            this.localPlayer.angle = Math.atan2(dy, dx);
+            const newAngle = Math.atan2(dy, dx);
+
+            // Only update if angle actually changed
+            if (this.localPlayer.angle !== newAngle) {
+                this.localPlayer.angle = newAngle;
+
+                // Throttle angle updates to server to avoid overwhelming it
+                const now = Date.now();
+                if (now - this.lastAngleUpdateTime >= this.angleUpdateThrottle) {
+                    this.lastAngleUpdateTime = now;
+                    this.sendAngleUpdate();
+                }
+            }
         });
 
         // Click to shoot
@@ -230,6 +244,19 @@ class Game {
         }));
     }
 
+    sendAngleUpdate() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+            return;
+        }
+
+        this.ws.send(JSON.stringify({
+            type: 'update',
+            data: {
+                angle: this.localPlayer.angle
+            }
+        }));
+    }
+
     shoot() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.playerId) {
             return;
@@ -241,6 +268,9 @@ class Game {
             return;
         }
         this.lastShootTime = now;
+
+        // Send current angle to server immediately before shooting to ensure accuracy
+        this.sendAngleUpdate();
 
         // Send shoot command to server
         this.ws.send(JSON.stringify({
