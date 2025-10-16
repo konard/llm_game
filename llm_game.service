@@ -1,0 +1,32 @@
+[Unit]
+Description=LLM Game - Multiplayer Circle Shooter
+After=network.target
+Documentation=https://github.com/andchir/llm_game
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/llm_game
+Environment="PATH=/opt/llm_game/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/opt/llm_game/venv/bin/python server/game_server.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=llm_game
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/llm_game
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target
