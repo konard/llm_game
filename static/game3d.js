@@ -544,9 +544,9 @@ class Game3D {
                 const point = intersects[0].point;
                 const dx = point.x - this.localPlayer.x;
                 const dz = point.z - this.localPlayer.y;
-                // Adjust angle by -π/2 because the tank barrel points along negative Z-axis
-                // when rotation.y = 0, but atan2(dz, dx) assumes pointing along positive X-axis
-                const newAngle = Math.atan2(dz, dx) - Math.PI / 2;
+                // Calculate angle in the XZ plane
+                // This angle is used by the server for bullet direction (0 = +X, π/2 = +Z)
+                const newAngle = Math.atan2(dz, dx);
 
                 if (this.localPlayer.angle !== newAngle) {
                     this.localPlayer.angle = newAngle;
@@ -754,7 +754,10 @@ class Game3D {
             const mesh = this.playerMeshes[id];
             mesh.position.x = player.x;
             mesh.position.z = player.y;
-            mesh.rotation.y = -player.angle;
+            // Adjust rotation to account for tank barrel pointing along -Z axis when rotation.y = 0
+            // The server uses angle where 0 = +X direction, π/2 = +Z direction
+            // We need to rotate the tank so barrel points from -Z (at rotation.y=0) to the correct direction
+            mesh.rotation.y = -(player.angle + Math.PI / 2);
 
             // Update scale if size changed
             const expectedScaleFactor = player.size / 20;
