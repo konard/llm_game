@@ -108,6 +108,19 @@ llm_game/
 - **Input handling**: Keyboard and mouse controls / Обработка клавиатуры и мыши
 - **Smooth rendering**: RequestAnimationFrame for fluid animation / Плавная анимация
 
+## Production Deployment / Развертывание в production
+
+For detailed instructions on deploying to a production Ubuntu server with systemd, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Для подробных инструкций по развертыванию на production Ubuntu сервере с systemd, см. [DEPLOYMENT.md](DEPLOYMENT.md).
+
+**Quick overview / Краткий обзор:**
+- systemd service configuration included / Включена конфигурация systemd сервиса
+- Nginx reverse proxy setup / Настройка Nginx reverse proxy
+- SSL/HTTPS with Let's Encrypt / SSL/HTTPS с Let's Encrypt
+- Security hardening / Усиление безопасности
+- Monitoring and troubleshooting / Мониторинг и устранение неполадок
+
 ## Development / Разработка
 
 ### Running Tests / Запуск тестов
