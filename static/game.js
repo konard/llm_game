@@ -38,6 +38,10 @@ class Game {
         this.lastPositionUpdateTime = 0;
         this.positionUpdateThrottle = 50; // milliseconds - send position updates max 20 times per second
 
+        // Interpolation state for smooth movement
+        this.playerInterpolation = {}; // Stores interpolation data for each remote player
+        this.lastFrameTime = performance.now();
+
         this.init();
     }
 
@@ -148,6 +152,41 @@ class Game {
                 break;
 
             case 'state':
+                // Update interpolation data for remote players before updating state
+                for (const [id, newPlayerData] of Object.entries(message.data.players)) {
+                    // Skip local player - no interpolation needed
+                    if (id === this.playerId) {
+                        continue;
+                    }
+
+                    // Initialize interpolation data if this is a new player
+                    if (!this.playerInterpolation[id]) {
+                        this.playerInterpolation[id] = {
+                            prevX: newPlayerData.x,
+                            prevY: newPlayerData.y,
+                            prevAngle: newPlayerData.angle,
+                            targetX: newPlayerData.x,
+                            targetY: newPlayerData.y,
+                            targetAngle: newPlayerData.angle,
+                            progress: 1
+                        };
+                    } else {
+                        // Store current target as previous position
+                        const interp = this.playerInterpolation[id];
+                        interp.prevX = interp.targetX;
+                        interp.prevY = interp.targetY;
+                        interp.prevAngle = interp.targetAngle;
+
+                        // Set new target from server
+                        interp.targetX = newPlayerData.x;
+                        interp.targetY = newPlayerData.y;
+                        interp.targetAngle = newPlayerData.angle;
+
+                        // Reset interpolation progress
+                        interp.progress = 0;
+                    }
+                }
+
                 this.players = message.data.players;
                 this.bullets = message.data.bullets;
 
@@ -173,6 +212,7 @@ class Game {
 
             case 'player_left':
                 delete this.players[message.player_id];
+                delete this.playerInterpolation[message.player_id];
                 console.log('Player left:', message.player_id);
                 break;
 
@@ -256,12 +296,57 @@ class Game {
     }
 
     startGameLoop() {
-        const loop = () => {
+        const loop = (currentTime) => {
+            const deltaTime = currentTime - this.lastFrameTime;
+            this.lastFrameTime = currentTime;
+
             this.update();
+            this.updateInterpolation(deltaTime);
             this.render();
             requestAnimationFrame(loop);
         };
         requestAnimationFrame(loop);
+    }
+
+    updateInterpolation(deltaTime) {
+        // Update interpolation for all remote players
+        for (const [id, interp] of Object.entries(this.playerInterpolation)) {
+            // Skip if no player data
+            if (!this.players[id]) {
+                continue;
+            }
+
+            // Skip local player
+            if (id === this.playerId) {
+                continue;
+            }
+
+            // Update interpolation progress
+            if (interp.progress < 1) {
+                // Interpolate over the expected update interval (50ms)
+                interp.progress += deltaTime / this.positionUpdateThrottle;
+                interp.progress = Math.min(1, interp.progress);
+
+                // Use ease-out cubic for smoother feel
+                const t = this.easeOutCubic(interp.progress);
+
+                // Update player position with interpolated values
+                this.players[id].x = interp.prevX + (interp.targetX - interp.prevX) * t;
+                this.players[id].y = interp.prevY + (interp.targetY - interp.prevY) * t;
+
+                // Interpolate angle (handle wrap-around)
+                let angleDiff = interp.targetAngle - interp.prevAngle;
+                // Normalize angle difference to [-PI, PI]
+                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+                this.players[id].angle = interp.prevAngle + angleDiff * t;
+            }
+        }
+    }
+
+    easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
     }
 
     update() {

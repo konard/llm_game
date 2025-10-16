@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Movement Interpolation Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 2px solid #4CAF50;
+            display: block;
+            margin: 20px auto;
+            background-color: #0a0a0a;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+        }
+        .info {
+            text-align: center;
+            margin: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1 style="text-align: center;">Movement Interpolation Test</h1>
+    <div class="info">
+        <p>This demonstrates the difference between direct position updates (jerky) and interpolated movement (smooth)</p>
+    </div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <div class="controls">
+        <button id="toggleInterpolation">Toggle Interpolation (Currently: ON)</button>
+        <button id="increaseLatency">Increase Latency</button>
+        <button id="decreaseLatency">Decrease Latency</button>
+    </div>
+    <div class="info">
+        <p>Simulated Network Latency: <span id="latency">100</span>ms</p>
+        <p>Update Rate: <span id="updateRate">20</span> updates/sec</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let interpolationEnabled = true;
+        let simulatedLatency = 100; // ms
+        const updateInterval = 50; // 20 updates per second
+
+        // Player that receives updates from "server"
+        const remotePlayer = {
+            // Current rendered position
+            x: 100,
+            y: 300,
+            // Target position from server
+            targetX: 100,
+            targetY: 300,
+            // Previous position (for interpolation)
+            prevX: 100,
+            prevY: 300,
+            // Interpolation progress (0 to 1)
+            interpProgress: 1,
+            color: '#ff6666',
+            size: 20
+        };
+
+        // Simulated "server" position that moves in a pattern
+        const serverPosition = {
+            x: 100,
+            y: 300,
+            angle: 0,
+            radius: 200,
+            centerX: 400,
+            centerY: 300
+        };
+
+        // Update "server" position to move in a circle
+        function updateServerPosition() {
+            serverPosition.angle += 0.02;
+            serverPosition.x = serverPosition.centerX + Math.cos(serverPosition.angle) * serverPosition.radius;
+            serverPosition.y = serverPosition.centerY + Math.sin(serverPosition.angle) * serverPosition.radius;
+        }
+
+        // Simulate receiving a position update from server
+        function receiveServerUpdate() {
+            // Store previous target as the new previous position
+            remotePlayer.prevX = remotePlayer.targetX;
+            remotePlayer.prevY = remotePlayer.targetY;
+
+            // Set new target from server
+            remotePlayer.targetX = serverPosition.x;
+            remotePlayer.targetY = serverPosition.y;
+
+            // Reset interpolation progress
+            remotePlayer.interpProgress = 0;
+        }
+
+        // Interpolation function (ease-out for smoother feel)
+        function easeOutCubic(t) {
+            return 1 - Math.pow(1 - t, 3);
+        }
+
+        // Update player position with or without interpolation
+        function updatePlayerPosition(deltaTime) {
+            if (interpolationEnabled) {
+                // Smooth interpolation between previous and target position
+                if (remotePlayer.interpProgress < 1) {
+                    remotePlayer.interpProgress += deltaTime / updateInterval;
+                    remotePlayer.interpProgress = Math.min(1, remotePlayer.interpProgress);
+
+                    const t = easeOutCubic(remotePlayer.interpProgress);
+                    remotePlayer.x = remotePlayer.prevX + (remotePlayer.targetX - remotePlayer.prevX) * t;
+                    remotePlayer.y = remotePlayer.prevY + (remotePlayer.targetY - remotePlayer.prevY) * t;
+                }
+            } else {
+                // Direct position update (jerky)
+                remotePlayer.x = remotePlayer.targetX;
+                remotePlayer.y = remotePlayer.targetY;
+            }
+        }
+
+        // Render the scene
+        function render() {
+            ctx.fillStyle = '#0a0a0a';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            ctx.strokeStyle = '#1a1a1a';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw path circle for reference
+            ctx.strokeStyle = '#333333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(serverPosition.centerX, serverPosition.centerY, serverPosition.radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Draw server position (ideal position)
+            ctx.fillStyle = '#4CAF50';
+            ctx.beginPath();
+            ctx.arc(serverPosition.x, serverPosition.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '12px Arial';
+            ctx.fillText('Server Position', serverPosition.x + 15, serverPosition.y + 5);
+
+            // Draw remote player (rendered position)
+            ctx.fillStyle = remotePlayer.color;
+            ctx.beginPath();
+            ctx.arc(remotePlayer.x, remotePlayer.y, remotePlayer.size, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillText('Rendered Player', remotePlayer.x + 25, remotePlayer.y + 5);
+
+            // Draw line between them to show lag
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([5, 5]);
+            ctx.beginPath();
+            ctx.moveTo(serverPosition.x, serverPosition.y);
+            ctx.lineTo(remotePlayer.x, remotePlayer.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Show interpolation status
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Interpolation: ${interpolationEnabled ? 'ON (Smooth)' : 'OFF (Jerky)'}`, 20, 30);
+        }
+
+        // Main game loop
+        let lastTime = performance.now();
+        let lastUpdate = performance.now();
+
+        function gameLoop(currentTime) {
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Update server position every frame
+            updateServerPosition();
+
+            // Simulate receiving updates at fixed intervals
+            if (currentTime - lastUpdate >= updateInterval) {
+                lastUpdate = currentTime;
+                receiveServerUpdate();
+            }
+
+            // Update player position
+            updatePlayerPosition(deltaTime);
+
+            // Render
+            render();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game loop
+        requestAnimationFrame(gameLoop);
+
+        // UI Controls
+        document.getElementById('toggleInterpolation').addEventListener('click', function() {
+            interpolationEnabled = !interpolationEnabled;
+            this.textContent = `Toggle Interpolation (Currently: ${interpolationEnabled ? 'ON' : 'OFF'})`;
+        });
+
+        document.getElementById('increaseLatency').addEventListener('click', function() {
+            simulatedLatency = Math.min(500, simulatedLatency + 50);
+            document.getElementById('latency').textContent = simulatedLatency;
+        });
+
+        document.getElementById('decreaseLatency').addEventListener('click', function() {
+            simulatedLatency = Math.max(0, simulatedLatency - 50);
+            document.getElementById('latency').textContent = simulatedLatency;
+        });
+    </script>
+</body>
+</html>
