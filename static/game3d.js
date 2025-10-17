@@ -638,7 +638,13 @@ class Game3D {
             this.checkPlayerHover(e.clientX, e.clientY);
         });
 
-        // Touch events for mobile - update angle on tap
+        // Click to shoot in cannon direction
+        this.renderer.domElement.addEventListener('click', (e) => {
+            if (!this.playerId) return;
+            this.shoot();
+        });
+
+        // Touch events for mobile - update angle on tap and shoot
         this.renderer.domElement.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!this.playerId) return;
@@ -668,6 +674,9 @@ class Game3D {
                     }
                 }
             }
+
+            // Shoot in the cannon direction
+            this.shoot();
         });
     }
 
