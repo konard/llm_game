@@ -43,6 +43,11 @@ class PhaserGame {
         // Only apply server correction if mismatch is larger than this
         this.serverReconciliationThreshold = 15; // pixels
 
+        // Death flash effect state
+        this.deathFlashActive = false;
+        this.deathFlashStartTime = 0;
+        this.deathFlashDuration = 1500; // milliseconds
+
         // Phaser game objects
         this.playerSprites = {};
         this.bulletSprites = {};
@@ -121,6 +126,23 @@ class PhaserGame {
                     graphics.lineBetween(0, y, 800, y);
                 }
 
+                // Create death flash overlay (initially invisible)
+                this.deathFlashGraphics = this.add.graphics();
+                this.deathFlashGraphics.setDepth(1000);
+
+                // Create death message text (initially invisible)
+                this.deathMessageText = this.add.text(400, 300, 'Вы убиты', {
+                    fontSize: '48px',
+                    fontFamily: 'Arial',
+                    fontStyle: 'bold',
+                    color: '#ffffff',
+                    stroke: '#ff0000',
+                    strokeThickness: 4
+                });
+                this.deathMessageText.setOrigin(0.5, 0.5);
+                this.deathMessageText.setDepth(1001);
+                this.deathMessageText.setVisible(false);
+
                 // Enable input
                 this.input.on('pointermove', (pointer) => {
                     self.handlePointerMove(pointer);
@@ -143,6 +165,7 @@ class PhaserGame {
             update() {
                 self.updateGame();
                 self.updateInterpolation();
+                self.updateDeathFlash();
             }
         }
 
@@ -292,7 +315,7 @@ class PhaserGame {
                 if (message.hits && message.hits.length > 0) {
                     message.hits.forEach(hit => {
                         if (hit.player_id === this.playerId) {
-                            this.flashScreen();
+                            this.startDeathFlash();
                         }
                     });
                 }
@@ -717,16 +740,45 @@ class PhaserGame {
         }, 5000);
     }
 
-    flashScreen() {
-        if (!this.gameScene) return;
+    updateDeathFlash() {
+        if (!this.gameScene || !this.gameScene.deathFlashGraphics) return;
 
-        const flash = this.gameScene.add.graphics();
-        flash.fillStyle(0xff0000, 0.3);
-        flash.fillRect(0, 0, 800, 600);
+        if (this.deathFlashActive) {
+            const elapsed = performance.now() - this.deathFlashStartTime;
 
-        this.gameScene.time.delayedCall(100, () => {
-            flash.destroy();
-        });
+            if (elapsed < this.deathFlashDuration) {
+                // Calculate flash intensity (fades out over time)
+                const progress = elapsed / this.deathFlashDuration;
+                // Create pulsing effect with sine wave
+                const pulseFrequency = 8; // Number of flashes
+                const pulse = Math.sin(progress * Math.PI * pulseFrequency);
+                const alpha = (1 - progress) * 0.5 * (pulse * 0.5 + 0.5);
+
+                // Draw red flash overlay
+                this.gameScene.deathFlashGraphics.clear();
+                this.gameScene.deathFlashGraphics.fillStyle(0xff0000, alpha);
+                this.gameScene.deathFlashGraphics.fillRect(0, 0, 800, 600);
+
+                // Show and update death message text with fading alpha
+                const messageAlpha = (1 - progress) * 0.9;
+                this.gameScene.deathMessageText.setAlpha(messageAlpha);
+                this.gameScene.deathMessageText.setVisible(true);
+            } else {
+                // Flash effect finished
+                this.deathFlashActive = false;
+                this.gameScene.deathFlashGraphics.clear();
+                this.gameScene.deathMessageText.setVisible(false);
+            }
+        } else {
+            // Make sure graphics are cleared when not active
+            this.gameScene.deathFlashGraphics.clear();
+            this.gameScene.deathMessageText.setVisible(false);
+        }
+    }
+
+    startDeathFlash() {
+        this.deathFlashActive = true;
+        this.deathFlashStartTime = performance.now();
     }
 }
 
