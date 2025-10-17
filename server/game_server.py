@@ -290,23 +290,37 @@ game = GameState()
 
 async def game_loop():
     """Main game loop that updates game state and broadcasts to clients"""
+    # Internal update rate for physics (high precision)
+    UPDATE_FPS = 60
+    # Broadcast rate to clients (optimized for network)
+    BROADCAST_FPS = 20
+
+    update_interval = 1 / UPDATE_FPS
+    broadcast_interval = 1 / BROADCAST_FPS
+    last_broadcast_time = 0
+
     while True:
         try:
-            # Update game state
+            current_time = time.time()
+
+            # Always update game physics at high rate for accuracy
             game.update_bullets()
             game.grow_players()
             hits = game.check_collisions()
 
-            # Broadcast game state to all clients
-            state = game.get_state()
-            await game.broadcast({
-                'type': 'state',
-                'data': state,
-                'hits': hits
-            })
+            # Broadcast to clients at reduced rate for network efficiency
+            # This reduces network load and allows better client-side interpolation
+            if current_time - last_broadcast_time >= broadcast_interval:
+                state = game.get_state()
+                await game.broadcast({
+                    'type': 'state',
+                    'data': state,
+                    'hits': hits
+                })
+                last_broadcast_time = current_time
 
-            # Run at ~60 FPS for smoother movement
-            await asyncio.sleep(1/60)
+            # Run physics updates at 60 FPS, broadcasts at 20 FPS
+            await asyncio.sleep(update_interval)
 
         except Exception as e:
             logger.error(f"Error in game loop: {e}")

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Jitter Demo - Why Movement Jerks on Slow Networks</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0a0a;
+            color: #00ff00;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #ff6666;
+        }
+        .demo-area {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000;
+        }
+        .controls {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .controls label {
+            display: block;
+            margin: 10px 0;
+        }
+        .controls input[type="range"] {
+            width: 300px;
+        }
+        .info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .value {
+            color: #ffff00;
+            font-weight: bold;
+        }
+        .good { color: #00ff00; }
+        .bad { color: #ff6666; }
+        .warning { color: #ffaa00; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Jitter Demo: Why 60 FPS Updates Cause Jerky Movement</h1>
+
+        <div class="info">
+            <h3>The Problem:</h3>
+            <p>Server broadcasts at <span class="value">60 FPS (every 16ms)</span> but:</p>
+            <ul>
+                <li class="bad">Slow networks have latency (50-300ms typical)</li>
+                <li class="bad">Network jitter causes uneven packet delivery</li>
+                <li class="bad">Updates arrive in bursts, not smoothly</li>
+                <li class="bad">Interpolation fights with rapid server updates</li>
+            </ul>
+        </div>
+
+        <div class="controls">
+            <h3>Simulate Network Conditions:</h3>
+
+            <label>
+                Network Latency: <span class="value" id="latency-val">100</span>ms
+                <br><input type="range" id="latency" min="10" max="300" value="100" step="10">
+            </label>
+
+            <label>
+                Network Jitter: <span class="value" id="jitter-val">50</span>ms
+                <br><input type="range" id="jitter" min="0" max="150" value="50" step="10">
+            </label>
+
+            <label>
+                Server Broadcast Rate: <span class="value" id="rate-val">60</span> FPS
+                <br><input type="range" id="rate" min="10" max="60" value="60" step="5">
+            </label>
+        </div>
+
+        <div class="demo-area">
+            <div>
+                <h3 class="bad">Current System (Jerky)</h3>
+                <canvas id="bad-canvas" width="400" height="300"></canvas>
+                <div class="info">
+                    <p>Server: <span class="value" id="bad-fps">60</span> FPS</p>
+                    <p>Updates received: <span class="value" id="bad-updates">0</span></p>
+                    <p>Update pattern: <span class="bad">Bursty, uneven</span></p>
+                </div>
+            </div>
+
+            <div>
+                <h3 class="good">Optimized System (Smooth)</h3>
+                <canvas id="good-canvas" width="400" height="300"></canvas>
+                <div class="info">
+                    <p>Server: <span class="value" id="good-fps">20</span> FPS</p>
+                    <p>Updates received: <span class="value" id="good-updates">0</span></p>
+                    <p>Update pattern: <span class="good">Consistent, predictable</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="info">
+            <h3>Analysis:</h3>
+            <p id="analysis">Adjusting parameters...</p>
+        </div>
+
+        <div class="info">
+            <h3>The Solution:</h3>
+            <ol>
+                <li class="good"><b>Reduce broadcast frequency:</b> 20-30 FPS instead of 60 FPS</li>
+                <li class="good"><b>Increase interpolation buffer:</b> More time to smooth out jitter</li>
+                <li class="good"><b>Adaptive interpolation delay:</b> Adjust based on network conditions</li>
+                <li class="good"><b>Delta compression:</b> Send only what changed (future improvement)</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        // Canvas setup
+        const badCanvas = document.getElementById('bad-canvas');
+        const goodCanvas = document.getElementById('good-canvas');
+        const badCtx = badCanvas.getContext('2d');
+        const goodCtx = goodCanvas.getContext('2d');
+
+        // Network simulation parameters
+        let latency = 100;  // Base latency in ms
+        let jitter = 50;    // Jitter variance in ms
+        let serverRate = 60; // Server broadcast rate in FPS
+
+        // Player state
+        let serverX = 50;
+        let serverVx = 2;
+
+        // Bad system (current)
+        let badX = 50;
+        let badUpdateBuffer = [];
+        let badUpdateCount = 0;
+
+        // Good system (optimized)
+        let goodX = 50;
+        let goodUpdateBuffer = [];
+        let goodUpdateCount = 0;
+
+        // Update UI
+        function updateControls() {
+            latency = parseInt(document.getElementById('latency').value);
+            jitter = parseInt(document.getElementById('jitter').value);
+            serverRate = parseInt(document.getElementById('rate').value);
+
+            document.getElementById('latency-val').textContent = latency;
+            document.getElementById('jitter-val').textContent = jitter;
+            document.getElementById('rate-val').textContent = serverRate;
+
+            document.getElementById('bad-fps').textContent = serverRate;
+            document.getElementById('good-fps').textContent = Math.min(20, serverRate);
+
+            analyzeConditions();
+        }
+
+        document.getElementById('latency').addEventListener('input', updateControls);
+        document.getElementById('jitter').addEventListener('input', updateControls);
+        document.getElementById('rate').addEventListener('input', updateControls);
+
+        function analyzeConditions() {
+            const updateInterval = 1000 / serverRate;
+            const analysis = document.getElementById('analysis');
+
+            if (serverRate > 30 && latency > 80) {
+                analysis.innerHTML = `<span class="bad">PROBLEM DETECTED:</span> Server sends updates every ${updateInterval.toFixed(1)}ms,
+                but network has ${latency}ms ± ${jitter}ms latency. Updates arrive in unpredictable bursts,
+                causing ${Math.floor(jitter / updateInterval)} updates to arrive nearly simultaneously, then gaps of ${latency}ms+.
+                This creates visible jerking!`;
+            } else if (serverRate > 30) {
+                analysis.innerHTML = `<span class="warning">POTENTIAL ISSUE:</span> High update rate (${serverRate} FPS) may cause jitter on slower networks.`;
+            } else {
+                analysis.innerHTML = `<span class="good">GOOD:</span> Update rate (${serverRate} FPS) allows smooth interpolation even with ${latency}ms latency.`;
+            }
+        }
+
+        // Simulate network delivery with latency and jitter
+        function simulateNetworkDelay(callback, isBadSystem) {
+            const baseDelay = latency;
+            const jitterAmount = (Math.random() - 0.5) * 2 * jitter;
+            const totalDelay = Math.max(0, baseDelay + jitterAmount);
+            setTimeout(callback, totalDelay);
+        }
+
+        // Server broadcasts (simulated)
+        function serverBroadcast() {
+            // Update server position (moves right, wraps around)
+            serverX += serverVx;
+            if (serverX > 400) serverX = 0;
+
+            const timestamp = performance.now();
+            const update = { x: serverX, timestamp };
+
+            // Bad system: receives all server updates (60 FPS)
+            simulateNetworkDelay(() => {
+                badUpdateBuffer.push({ ...update });
+                badUpdateCount++;
+                document.getElementById('bad-updates').textContent = badUpdateCount;
+            }, true);
+
+            // Good system: receives throttled updates (20 FPS max)
+            // Simulate server sending fewer updates
+            if (Math.random() < Math.min(20, serverRate) / serverRate) {
+                simulateNetworkDelay(() => {
+                    goodUpdateBuffer.push({ ...update });
+                    goodUpdateCount++;
+                    document.getElementById('good-updates').textContent = goodUpdateCount;
+                }, false);
+            }
+        }
+
+        // Client interpolation (bad system - fights with rapid updates)
+        function updateBadSystem() {
+            if (badUpdateBuffer.length > 0) {
+                // Too many updates arrive at once due to network jitter
+                // Take the most recent, causing jerky jumps
+                const update = badUpdateBuffer.shift();
+
+                // Rapid updates + jitter = visible jerking
+                const speed = 0.3;
+                badX += (update.x - badX) * speed;
+
+                // Clear old updates (simulates client struggling with bursts)
+                if (badUpdateBuffer.length > 5) {
+                    badUpdateBuffer.shift();
+                }
+            }
+        }
+
+        // Client interpolation (good system - smooth with buffering)
+        function updateGoodSystem() {
+            const currentTime = performance.now();
+            const interpolationDelay = 150; // Larger buffer for jitter tolerance
+            const renderTime = currentTime - interpolationDelay;
+
+            if (goodUpdateBuffer.length >= 2) {
+                // Find two updates to interpolate between
+                let update1 = null;
+                let update2 = null;
+
+                for (let i = 0; i < goodUpdateBuffer.length - 1; i++) {
+                    if (goodUpdateBuffer[i].timestamp <= renderTime &&
+                        goodUpdateBuffer[i + 1].timestamp >= renderTime) {
+                        update1 = goodUpdateBuffer[i];
+                        update2 = goodUpdateBuffer[i + 1];
+                        break;
+                    }
+                }
+
+                if (update1 && update2) {
+                    const totalTime = update2.timestamp - update1.timestamp;
+                    const elapsed = renderTime - update1.timestamp;
+                    const t = totalTime > 0 ? Math.min(1, elapsed / totalTime) : 1;
+
+                    goodX = update1.x + (update2.x - update1.x) * t;
+                } else if (goodUpdateBuffer.length > 0) {
+                    // Smooth towards latest
+                    const latest = goodUpdateBuffer[goodUpdateBuffer.length - 1];
+                    goodX += (latest.x - goodX) * 0.1;
+                }
+
+                // Clean old updates
+                while (goodUpdateBuffer.length > 0 &&
+                       goodUpdateBuffer[0].timestamp < renderTime - 200) {
+                    goodUpdateBuffer.shift();
+                }
+            } else if (goodUpdateBuffer.length === 1) {
+                // Smooth towards the single update
+                goodX += (goodUpdateBuffer[0].x - goodX) * 0.1;
+            }
+        }
+
+        // Render both canvases
+        function render() {
+            // Bad system
+            badCtx.fillStyle = '#000';
+            badCtx.fillRect(0, 0, 400, 300);
+            badCtx.fillStyle = '#ff6666';
+            badCtx.beginPath();
+            badCtx.arc(badX, 150, 20, 0, Math.PI * 2);
+            badCtx.fill();
+
+            // Show buffer size
+            badCtx.fillStyle = '#00ff00';
+            badCtx.font = '12px monospace';
+            badCtx.fillText(`Buffer: ${badUpdateBuffer.length} updates`, 10, 20);
+
+            // Good system
+            goodCtx.fillStyle = '#000';
+            goodCtx.fillRect(0, 0, 400, 300);
+            goodCtx.fillStyle = '#00ff00';
+            goodCtx.beginPath();
+            goodCtx.arc(goodX, 150, 20, 0, Math.PI * 2);
+            goodCtx.fill();
+
+            // Show buffer size
+            goodCtx.fillStyle = '#00ff00';
+            goodCtx.font = '12px monospace';
+            goodCtx.fillText(`Buffer: ${goodUpdateBuffer.length} updates`, 10, 20);
+        }
+
+        // Main loops
+        function gameLoop() {
+            updateBadSystem();
+            updateGoodSystem();
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Server loop
+        setInterval(() => {
+            serverBroadcast();
+        }, 1000 / 60);  // Server always runs at 60 FPS internally
+
+        // Start
+        updateControls();
+        gameLoop();
+    </script>
+</body>
+</html>
