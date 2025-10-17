@@ -356,6 +356,13 @@ class PhaserGame {
                 }
                 break;
 
+            case 'player_hit':
+                // Direct hit notification to ensure death screen always appears
+                if (message.hit && message.hit.player_id === this.playerId) {
+                    this.startDeathFlash();
+                }
+                break;
+
             case 'error':
                 this.showError(message.message);
                 break;
@@ -456,9 +463,9 @@ class PhaserGame {
             }
         }
 
-        // Clamp position
-        this.localPlayer.x = Math.max(0, Math.min(this.config.canvas_width, this.localPlayer.x));
-        this.localPlayer.y = Math.max(0, Math.min(this.config.canvas_height, this.localPlayer.y));
+        // Clamp position, considering player size (radius) to prevent going beyond boundaries
+        this.localPlayer.x = Math.max(this.localPlayer.size, Math.min(this.config.canvas_width - this.localPlayer.size, this.localPlayer.x));
+        this.localPlayer.y = Math.max(this.localPlayer.size, Math.min(this.config.canvas_height - this.localPlayer.size, this.localPlayer.y));
 
         if (moved) {
             const now = Date.now();
