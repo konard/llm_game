@@ -140,6 +140,35 @@ For detailed instructions on deploying to a production Ubuntu server with system
 
 ### Running Tests / Запуск тестов
 
+#### Automated E2E Tests / Автоматизированные E2E тесты
+
+This project includes Playwright tests for automated end-to-end testing / Проект включает Playwright тесты для автоматизированного тестирования:
+
+**Install test dependencies / Установить зависимости для тестов:**
+```bash
+npm install
+npx playwright install --with-deps chromium
+```
+
+**Run all tests / Запустить все тесты:**
+```bash
+npm test
+```
+
+**Run network throttling tests / Запустить тесты с ограничением сети:**
+```bash
+npm run test:network
+```
+
+**Run with UI / Запустить с интерфейсом:**
+```bash
+npm run test:ui
+```
+
+See `tests/README.md` for detailed testing documentation / См. `tests/README.md` для подробной документации по тестам.
+
+#### Manual Testing / Ручное тестирование
+
 Test scripts are available in the `examples/` directory / Тестовые скрипты в папке `examples/`
 
 ### Adding Features / Добавление функций
