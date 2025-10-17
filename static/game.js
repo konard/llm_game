@@ -436,25 +436,36 @@ class Game {
                 this.players[id].angle = interp.currentAngle;
 
             } else if (buffer.length > 0) {
-                // If we can't find two updates to interpolate, use the most recent one
-                // This handles cases where we're ahead of or behind the buffer
-                const latestUpdate = buffer[buffer.length - 1];
+                // CRITICAL FIX: Never move backwards in time!
+                // If we can't interpolate properly, HOLD the current position
+                // until we have enough buffered data. This prevents back-and-forth jerking.
 
-                // Smoothly move towards the latest position
-                const speed = 0.3; // Smoothing factor
-                interp.currentX += (latestUpdate.x - interp.currentX) * speed;
-                interp.currentY += (latestUpdate.y - interp.currentY) * speed;
+                // Only move forward if we're behind the oldest update in buffer
+                const oldestUpdate = buffer[0];
 
-                // Handle angle smoothing
-                let angleDiff = latestUpdate.angle - interp.currentAngle;
-                while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-                while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-                interp.currentAngle += angleDiff * speed;
+                if (renderTime < oldestUpdate.timestamp) {
+                    // We're rendering in the past - need to catch up smoothly
+                    // Use gentle extrapolation to reach the oldest known position
+                    const speed = 0.15; // Slower smoothing to avoid jerks
+                    interp.currentX += (oldestUpdate.x - interp.currentX) * speed;
+                    interp.currentY += (oldestUpdate.y - interp.currentY) * speed;
 
-                // Update player position
-                this.players[id].x = interp.currentX;
-                this.players[id].y = interp.currentY;
-                this.players[id].angle = interp.currentAngle;
+                    // Handle angle smoothing
+                    let angleDiff = oldestUpdate.angle - interp.currentAngle;
+                    while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+                    while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+                    interp.currentAngle += angleDiff * speed;
+
+                    // Update player position
+                    this.players[id].x = interp.currentX;
+                    this.players[id].y = interp.currentY;
+                    this.players[id].angle = interp.currentAngle;
+                } else {
+                    // We're ahead of the buffer - HOLD position (DO NOT MOVE BACKWARDS!)
+                    // This creates a momentary freeze instead of jerky back-and-forth movement
+                    // The freeze is much less noticeable than jerking
+                    // Position stays at current interpolated values
+                }
             }
 
             // Clean up old updates that are no longer needed
