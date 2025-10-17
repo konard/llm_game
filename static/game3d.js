@@ -59,6 +59,11 @@ class Game3D {
         // Only apply server correction if mismatch is larger than this
         this.serverReconciliationThreshold = 15; // pixels
 
+        // Death flash effect state
+        this.deathFlashActive = false;
+        this.deathFlashStartTime = 0;
+        this.deathFlashDuration = 1500; // milliseconds
+
         this.init();
     }
 
@@ -91,6 +96,18 @@ class Game3D {
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.container.appendChild(this.renderer.domElement);
+
+        // Create 2D overlay canvas for death flash effect
+        this.overlayCanvas = document.createElement('canvas');
+        this.overlayCanvas.width = this.container.clientWidth;
+        this.overlayCanvas.height = this.container.clientHeight;
+        this.overlayCanvas.style.position = 'absolute';
+        this.overlayCanvas.style.top = '0';
+        this.overlayCanvas.style.left = '0';
+        this.overlayCanvas.style.pointerEvents = 'none';
+        this.container.style.position = 'relative';
+        this.container.appendChild(this.overlayCanvas);
+        this.overlayCtx = this.overlayCanvas.getContext('2d');
 
         // Add lights
         const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
@@ -132,6 +149,8 @@ class Game3D {
             this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
             this.camera.updateProjectionMatrix();
             this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+            this.overlayCanvas.width = this.container.clientWidth;
+            this.overlayCanvas.height = this.container.clientHeight;
         });
     }
 
@@ -515,7 +534,7 @@ class Game3D {
                 if (message.hits && message.hits.length > 0) {
                     message.hits.forEach(hit => {
                         if (hit.player_id === this.playerId) {
-                            this.flashScreen();
+                            this.startDeathFlash();
                         }
                     });
                 }
@@ -1003,6 +1022,43 @@ class Game3D {
 
         // Render scene
         this.renderer.render(this.scene, this.camera);
+
+        // Draw death flash and message if active
+        this.overlayCtx.clearRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+        if (this.deathFlashActive) {
+            const elapsed = performance.now() - this.deathFlashStartTime;
+
+            if (elapsed < this.deathFlashDuration) {
+                // Calculate flash intensity (fades out over time)
+                const progress = elapsed / this.deathFlashDuration;
+                // Create pulsing effect with sine wave
+                const pulseFrequency = 8; // Number of flashes
+                const pulse = Math.sin(progress * Math.PI * pulseFrequency);
+                const alpha = (1 - progress) * 0.5 * (pulse * 0.5 + 0.5);
+
+                // Draw red flash overlay
+                this.overlayCtx.fillStyle = '#ff0000';
+                this.overlayCtx.globalAlpha = alpha;
+                this.overlayCtx.fillRect(0, 0, this.overlayCanvas.width, this.overlayCanvas.height);
+                this.overlayCtx.globalAlpha = 1.0;
+
+                // Draw "Вы убиты" message in the center
+                const messageAlpha = (1 - progress) * 0.9;
+                this.overlayCtx.globalAlpha = messageAlpha;
+                this.overlayCtx.font = 'bold 48px Arial';
+                this.overlayCtx.fillStyle = '#ffffff';
+                this.overlayCtx.textAlign = 'center';
+                this.overlayCtx.textBaseline = 'middle';
+                this.overlayCtx.strokeStyle = '#ff0000';
+                this.overlayCtx.lineWidth = 4;
+                this.overlayCtx.strokeText('Вы убиты', this.overlayCanvas.width / 2, this.overlayCanvas.height / 2);
+                this.overlayCtx.fillText('Вы убиты', this.overlayCanvas.width / 2, this.overlayCanvas.height / 2);
+                this.overlayCtx.globalAlpha = 1.0;
+            } else {
+                // Flash effect finished
+                this.deathFlashActive = false;
+            }
+        }
     }
 
     updateUI() {
@@ -1038,13 +1094,9 @@ class Game3D {
         }, 5000);
     }
 
-    flashScreen() {
-        // Flash the screen red by temporarily changing background
-        const originalColor = this.scene.background;
-        this.scene.background = new THREE.Color(0x330000);
-        setTimeout(() => {
-            this.scene.background = originalColor;
-        }, 100);
+    startDeathFlash() {
+        this.deathFlashActive = true;
+        this.deathFlashStartTime = performance.now();
     }
 }
 

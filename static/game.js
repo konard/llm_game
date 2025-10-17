@@ -56,6 +56,11 @@ class Game {
         // Only apply server correction if mismatch is larger than this
         this.serverReconciliationThreshold = 15; // pixels
 
+        // Death flash effect state
+        this.deathFlashActive = false;
+        this.deathFlashStartTime = 0;
+        this.deathFlashDuration = 1500; // milliseconds
+
         this.init();
     }
 
@@ -246,7 +251,7 @@ class Game {
                 if (message.hits && message.hits.length > 0) {
                     message.hits.forEach(hit => {
                         if (hit.player_id === this.playerId) {
-                            this.flashScreen('#ff0000');
+                            this.startDeathFlash();
                         }
                     });
                 }
@@ -660,6 +665,11 @@ class Game {
         this.hoveredPlayer = hoveredPlayerId;
     }
 
+    startDeathFlash() {
+        this.deathFlashActive = true;
+        this.deathFlashStartTime = performance.now();
+    }
+
     render() {
         // Clear canvas
         this.ctx.fillStyle = '#0a0a0a';
@@ -677,6 +687,42 @@ class Game {
         // Draw all bullets
         for (const bullet of Object.values(this.bullets)) {
             this.drawBullet(bullet);
+        }
+
+        // Draw death flash and message if active
+        if (this.deathFlashActive) {
+            const elapsed = performance.now() - this.deathFlashStartTime;
+
+            if (elapsed < this.deathFlashDuration) {
+                // Calculate flash intensity (fades out over time)
+                const progress = elapsed / this.deathFlashDuration;
+                // Create pulsing effect with sine wave
+                const pulseFrequency = 8; // Number of flashes
+                const pulse = Math.sin(progress * Math.PI * pulseFrequency);
+                const alpha = (1 - progress) * 0.5 * (pulse * 0.5 + 0.5);
+
+                // Draw red flash overlay
+                this.ctx.fillStyle = '#ff0000';
+                this.ctx.globalAlpha = alpha;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.globalAlpha = 1.0;
+
+                // Draw "Вы убиты" message in the center
+                const messageAlpha = (1 - progress) * 0.9;
+                this.ctx.globalAlpha = messageAlpha;
+                this.ctx.font = 'bold 48px Arial';
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.strokeStyle = '#ff0000';
+                this.ctx.lineWidth = 4;
+                this.ctx.strokeText('Вы убиты', this.canvas.width / 2, this.canvas.height / 2);
+                this.ctx.fillText('Вы убиты', this.canvas.width / 2, this.canvas.height / 2);
+                this.ctx.globalAlpha = 1.0;
+            } else {
+                // Flash effect finished
+                this.deathFlashActive = false;
+            }
         }
 
         // Update UI

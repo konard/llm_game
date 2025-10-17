@@ -30,7 +30,7 @@ PLAYER_SPEED = 5
 BULLET_SPEED = 10
 BULLET_SIZE = 5
 HIT_SIZE_REDUCTION = 10
-RESPAWN_EDGE_MARGIN = 50  # Distance from edge for respawn
+RESPAWN_EDGE_MARGIN = 0  # Distance from edge for respawn
 
 
 @dataclass
