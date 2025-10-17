@@ -349,47 +349,31 @@ class Game {
             this.checkPlayerHover(mouseX, mouseY, e.clientX, e.clientY);
         });
 
-        // Click/tap to move, double-click/tap to shoot
-        this.canvas.addEventListener('click', (e) => {
-            const now = Date.now();
-            const timeSinceLastClick = now - this.lastClickTime;
-
-            if (timeSinceLastClick < this.doubleClickThreshold) {
-                // Double click - shoot
-                this.shoot();
-                this.lastClickTime = 0; // Reset to prevent triple-click issues
-                this.targetPosition = null; // Cancel movement on shoot
-            } else {
-                // Single click - set target position to move towards
-                const rect = this.canvas.getBoundingClientRect();
-                const clickX = e.clientX - rect.left;
-                const clickY = e.clientY - rect.top;
-
-                this.targetPosition = { x: clickX, y: clickY };
-                this.lastClickTime = now;
-            }
-        });
-
-        // Touch events for mobile
+        // Touch events for mobile - update angle on tap
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const now = Date.now();
-            const timeSinceLastClick = now - this.lastClickTime;
+            if (!this.playerId) return;
 
-            if (timeSinceLastClick < this.doubleClickThreshold) {
-                // Double tap - shoot
-                this.shoot();
-                this.lastClickTime = 0;
-                this.targetPosition = null;
-            } else {
-                // Single tap - set target position
-                const rect = this.canvas.getBoundingClientRect();
-                const touch = e.touches[0];
-                const touchX = touch.clientX - rect.left;
-                const touchY = touch.clientY - rect.top;
+            const rect = this.canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
 
-                this.targetPosition = { x: touchX, y: touchY };
-                this.lastClickTime = now;
+            // Calculate angle from player to touch point
+            const dx = touchX - this.localPlayer.x;
+            const dy = touchY - this.localPlayer.y;
+            const newAngle = Math.atan2(dy, dx);
+
+            // Update angle if it changed
+            if (this.localPlayer.angle !== newAngle) {
+                this.localPlayer.angle = newAngle;
+
+                // Send angle update to server
+                const now = Date.now();
+                if (now - this.lastAngleUpdateTime >= this.angleUpdateThrottle) {
+                    this.lastAngleUpdateTime = now;
+                    this.sendAngleUpdate();
+                }
             }
         });
     }

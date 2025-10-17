@@ -638,60 +638,34 @@ class Game3D {
             this.checkPlayerHover(e.clientX, e.clientY);
         });
 
-        // Click/tap to move, double-click/tap to shoot
-        this.renderer.domElement.addEventListener('click', (e) => {
-            const now = Date.now();
-            const timeSinceLastClick = now - this.lastClickTime;
-
-            if (timeSinceLastClick < this.doubleClickThreshold) {
-                // Double click - shoot
-                this.shoot();
-                this.lastClickTime = 0; // Reset to prevent triple-click issues
-                this.targetPosition = null; // Cancel movement on shoot
-            } else {
-                // Single click - set target position to move towards
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-                const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-                // Calculate world position
-                this.raycaster.setFromCamera({ x: mouseX, y: mouseY }, this.camera);
-                const intersects = this.raycaster.intersectObject(this.ground);
-
-                if (intersects.length > 0) {
-                    const point = intersects[0].point;
-                    this.targetPosition = { x: point.x, y: point.z };
-                    this.lastClickTime = now;
-                }
-            }
-        });
-
-        // Touch events for mobile
+        // Touch events for mobile - update angle on tap
         this.renderer.domElement.addEventListener('touchstart', (e) => {
             e.preventDefault();
-            const now = Date.now();
-            const timeSinceLastClick = now - this.lastClickTime;
+            if (!this.playerId) return;
 
-            if (timeSinceLastClick < this.doubleClickThreshold) {
-                // Double tap - shoot
-                this.shoot();
-                this.lastClickTime = 0;
-                this.targetPosition = null;
-            } else {
-                // Single tap - set target position
-                const rect = this.renderer.domElement.getBoundingClientRect();
-                const touch = e.touches[0];
-                const touchX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
-                const touchY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
+            const rect = this.renderer.domElement.getBoundingClientRect();
+            const touch = e.touches[0];
+            const touchX = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
+            const touchY = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
 
-                // Calculate world position
-                this.raycaster.setFromCamera({ x: touchX, y: touchY }, this.camera);
-                const intersects = this.raycaster.intersectObject(this.ground);
+            // Calculate world position
+            this.raycaster.setFromCamera({ x: touchX, y: touchY }, this.camera);
+            const intersects = this.raycaster.intersectObject(this.ground);
 
-                if (intersects.length > 0) {
-                    const point = intersects[0].point;
-                    this.targetPosition = { x: point.x, y: point.z };
-                    this.lastClickTime = now;
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                const dx = point.x - this.localPlayer.x;
+                const dz = point.z - this.localPlayer.y;
+                const newAngle = Math.atan2(dz, dx);
+
+                if (this.localPlayer.angle !== newAngle) {
+                    this.localPlayer.angle = newAngle;
+
+                    const now = Date.now();
+                    if (now - this.lastAngleUpdateTime >= this.angleUpdateThrottle) {
+                        this.lastAngleUpdateTime = now;
+                        this.sendAngleUpdate();
+                    }
                 }
             }
         });
