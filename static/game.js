@@ -349,7 +349,13 @@ class Game {
             this.checkPlayerHover(mouseX, mouseY, e.clientX, e.clientY);
         });
 
-        // Touch events for mobile - update angle on tap
+        // Click to shoot in cannon direction
+        this.canvas.addEventListener('click', (e) => {
+            if (!this.playerId) return;
+            this.shoot();
+        });
+
+        // Touch events for mobile - update angle on tap and shoot
         this.canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             if (!this.playerId) return;
@@ -375,6 +381,9 @@ class Game {
                     this.sendAngleUpdate();
                 }
             }
+
+            // Shoot in the cannon direction
+            this.shoot();
         });
     }
 

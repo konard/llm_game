@@ -395,7 +395,7 @@ class PhaserGame {
     }
 
     handlePointerDown(pointer) {
-        // On mobile devices, update cannon angle towards tap position
+        // Update cannon angle towards tap/click position and shoot
         if (!this.playerId) return;
 
         const mouseX = pointer.x;
@@ -414,6 +414,9 @@ class PhaserGame {
                 this.sendAngleUpdate();
             }
         }
+
+        // Shoot in the cannon direction
+        this.shoot();
     }
 
     updateGame() {
