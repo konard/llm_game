@@ -68,22 +68,24 @@ class GameState:
         self.bullet_counter = 0
         self.player_counter = 0
 
-    def get_random_edge_position(self) -> tuple:
-        """Generate a random position at the edge of the game area"""
+    def get_random_edge_position(self, player_size: float) -> tuple:
+        """Generate a random position at the edge of the game area, considering player size"""
+        # Ensure player circle stays within bounds by adding player size as margin
+        margin = player_size
         edge = random.choice(['top', 'bottom', 'left', 'right'])
 
         if edge == 'top':
-            x = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_WIDTH - RESPAWN_EDGE_MARGIN)
-            y = RESPAWN_EDGE_MARGIN
+            x = random.uniform(margin, CANVAS_WIDTH - margin)
+            y = margin
         elif edge == 'bottom':
-            x = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_WIDTH - RESPAWN_EDGE_MARGIN)
-            y = CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN
+            x = random.uniform(margin, CANVAS_WIDTH - margin)
+            y = CANVAS_HEIGHT - margin
         elif edge == 'left':
-            x = RESPAWN_EDGE_MARGIN
-            y = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN)
+            x = margin
+            y = random.uniform(margin, CANVAS_HEIGHT - margin)
         else:  # right
-            x = CANVAS_WIDTH - RESPAWN_EDGE_MARGIN
-            y = random.uniform(RESPAWN_EDGE_MARGIN, CANVAS_HEIGHT - RESPAWN_EDGE_MARGIN)
+            x = CANVAS_WIDTH - margin
+            y = random.uniform(margin, CANVAS_HEIGHT - margin)
 
         return x, y
 
@@ -133,9 +135,11 @@ class GameState:
         player = self.players[player_id]
 
         if 'x' in data:
-            player.x = max(0, min(CANVAS_WIDTH, data['x']))
+            # Clamp position considering player size (radius) to prevent going beyond boundaries
+            player.x = max(player.size, min(CANVAS_WIDTH - player.size, data['x']))
         if 'y' in data:
-            player.y = max(0, min(CANVAS_HEIGHT, data['y']))
+            # Clamp position considering player size (radius) to prevent going beyond boundaries
+            player.y = max(player.size, min(CANVAS_HEIGHT - player.size, data['y']))
         if 'angle' in data:
             player.angle = data['angle']
 
@@ -238,8 +242,8 @@ class GameState:
             player = self.players[hit['player_id']]
             player.size = PLAYER_INITIAL_SIZE
 
-            # Move player to random edge position
-            player.x, player.y = self.get_random_edge_position()
+            # Move player to random edge position, considering player size to stay within bounds
+            player.x, player.y = self.get_random_edge_position(player.size)
 
         return hits
 
@@ -283,6 +287,19 @@ class GameState:
         for player_id in dead_connections:
             self.remove_player(player_id)
 
+    async def send_to_player(self, player_id: str, message: dict):
+        """Send a message to a specific player"""
+        if player_id not in self.connections:
+            return False
+
+        try:
+            await self.connections[player_id].send_str(json.dumps(message))
+            return True
+        except Exception as e:
+            logger.error(f"Error sending to {player_id}: {e}")
+            self.remove_player(player_id)
+            return False
+
 
 # Global game state
 game = GameState()
@@ -307,6 +324,14 @@ async def game_loop():
             game.update_bullets()
             game.grow_players()
             hits = game.check_collisions()
+
+            # Send immediate hit notifications to ensure death screen always appears
+            # This is sent directly to each hit player to guarantee delivery
+            for hit in hits:
+                await game.send_to_player(hit['player_id'], {
+                    'type': 'player_hit',
+                    'hit': hit
+                })
 
             # Broadcast to clients at reduced rate for network efficiency
             # This reduces network load and allows better client-side interpolation
