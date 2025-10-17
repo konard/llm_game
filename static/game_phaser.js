@@ -39,6 +39,10 @@ class PhaserGame {
         this.playerUpdateBuffer = {};
         this.interpolationDelay = 150;
 
+        // Client-side prediction: threshold for server reconciliation
+        // Only apply server correction if mismatch is larger than this
+        this.serverReconciliationThreshold = 15; // pixels
+
         // Phaser game objects
         this.playerSprites = {};
         this.bulletSprites = {};
@@ -233,12 +237,29 @@ class PhaserGame {
                     this.players[id].color = newPlayerData.color;
                     this.players[id].name = newPlayerData.name;
 
+                    // For local player, use client-side prediction with server reconciliation
+                    // The client is authoritative for its own position to ensure smooth movement
                     if (id === this.playerId) {
-                        this.players[id].x = newPlayerData.x;
-                        this.players[id].y = newPlayerData.y;
-                        this.players[id].angle = newPlayerData.angle;
-                        this.localPlayer = this.players[id];
-                        continue;
+                        // Check if server position differs significantly from client prediction
+                        const dx = newPlayerData.x - this.localPlayer.x;
+                        const dy = newPlayerData.y - this.localPlayer.y;
+                        const distanceSquared = dx * dx + dy * dy;
+                        const threshold = this.serverReconciliationThreshold;
+
+                        // Only apply server correction if mismatch exceeds threshold
+                        // This prevents small network jitter from causing stuttering
+                        if (distanceSquared > threshold * threshold) {
+                            // Significant mismatch detected - apply gentle correction
+                            // Use smooth interpolation instead of instant snap for better UX
+                            const correctionFactor = 0.3; // 30% correction per frame
+                            this.localPlayer.x += dx * correctionFactor;
+                            this.localPlayer.y += dy * correctionFactor;
+                        }
+
+                        // Always update angle from server (less noticeable, prevents shooting misalignment)
+                        this.localPlayer.angle = newPlayerData.angle;
+                        this.players[id] = this.localPlayer;
+                        continue; // Skip interpolation setup for local player
                     }
 
                     if (!this.playerUpdateBuffer[id]) {
