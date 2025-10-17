@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Multiplayer Circle Shooter Game</title>
+    <title>Multiplayer Circle Shooter Game - Phaser Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -53,19 +54,6 @@
         .info-value {
             color: #4CAF50;
             font-weight: bold;
-        }
-
-        #game-canvas {
-            border: 3px solid #4CAF50;
-            border-radius: 5px;
-            background-color: #0a0a0a;
-            box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
-            cursor: crosshair;
-        }
-
-        #status {
-            font-size: 16px;
-            color: #888;
         }
 
         .connection-status {
@@ -186,19 +174,6 @@
             background-color: #3d8b40;
         }
 
-        #player-tooltip {
-            position: absolute;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: #ffffff;
-            padding: 8px 12px;
-            border-radius: 5px;
-            font-size: 14px;
-            pointer-events: none;
-            z-index: 100;
-            display: none;
-            white-space: nowrap;
-        }
-
         #version-switcher {
             position: fixed;
             top: 20px;
@@ -215,17 +190,32 @@
             text-decoration: none;
             border: 2px solid #4CAF50;
             transition: all 0.3s;
+            margin-left: 10px;
         }
 
         #version-switcher a:hover {
             background-color: #4CAF50;
             color: #1a1a1a;
         }
+
+        #framework-badge {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background-color: #2a2a2a;
+            color: #4CAF50;
+            padding: 10px 20px;
+            border-radius: 5px;
+            border: 2px solid #4CAF50;
+            z-index: 999;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
+    <div id="framework-badge">Powered by Phaser.js</div>
     <div id="version-switcher">
-        <a href="/static/index_phaser.html">Phaser Version</a>
+        <a href="/static/index.html">Canvas Version</a>
         <a href="/static/index3d.html">3D Version</a>
     </div>
     <div id="name-modal">
@@ -238,7 +228,6 @@
         </div>
     </div>
 
-    <div id="player-tooltip"></div>
     <div id="game-container">
         <div id="info-panel">
             <div class="info-item">
@@ -258,7 +247,7 @@
             </div>
         </div>
 
-        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div id="phaser-game"></div>
 
         <div class="error-message" id="error-message"></div>
 
@@ -273,6 +262,6 @@
     </div>
 
     <script src="/static/config.js"></script>
-    <script src="/static/game.js"></script>
+    <script src="/static/game_phaser.js"></script>
 </body>
 </html>
