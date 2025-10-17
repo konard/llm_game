@@ -782,5 +782,18 @@ class Game {
 
 // Initialize game when page loads
 window.addEventListener('DOMContentLoaded', () => {
-    new Game();
+    window.game = new Game();
+    // Expose key properties for testing
+    Object.defineProperty(window, 'ws', {
+        get() { return window.game ? window.game.ws : null; }
+    });
+    Object.defineProperty(window, 'playerId', {
+        get() { return window.game ? window.game.playerId : null; }
+    });
+    Object.defineProperty(window, 'players', {
+        get() { return window.game ? window.game.players : {}; }
+    });
+    Object.defineProperty(window, 'bullets', {
+        get() { return window.game ? window.game.bullets : {}; }
+    });
 });
