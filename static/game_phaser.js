@@ -148,6 +148,7 @@ class PhaserGame {
                     self.handlePointerMove(pointer);
                 });
 
+                // Touch/click on mobile - update angle
                 this.input.on('pointerdown', (pointer) => {
                     self.handlePointerDown(pointer);
                 });
@@ -394,16 +395,24 @@ class PhaserGame {
     }
 
     handlePointerDown(pointer) {
-        const now = Date.now();
-        const timeSinceLastClick = now - this.lastClickTime;
+        // On mobile devices, update cannon angle towards tap position
+        if (!this.playerId) return;
 
-        if (timeSinceLastClick < this.doubleClickThreshold) {
-            this.shoot();
-            this.lastClickTime = 0;
-            this.targetPosition = null;
-        } else {
-            this.targetPosition = { x: pointer.x, y: pointer.y };
-            this.lastClickTime = now;
+        const mouseX = pointer.x;
+        const mouseY = pointer.y;
+
+        const dx = mouseX - this.localPlayer.x;
+        const dy = mouseY - this.localPlayer.y;
+        const newAngle = Math.atan2(dy, dx);
+
+        if (this.localPlayer.angle !== newAngle) {
+            this.localPlayer.angle = newAngle;
+
+            const now = Date.now();
+            if (now - this.lastAngleUpdateTime >= this.angleUpdateThrottle) {
+                this.lastAngleUpdateTime = now;
+                this.sendAngleUpdate();
+            }
         }
     }
 
