@@ -50,7 +50,10 @@ class Game3D {
         this.playerInterpolation = {}; // Stores interpolation data for each remote player
         this.playerUpdateBuffer = {}; // Buffer to store incoming position updates
         this.lastFrameTime = performance.now();
-        this.interpolationDelay = 100; // ms - intentional delay for smooth interpolation
+        // Increased interpolation delay to handle network jitter better
+        // With server broadcasting at 20 FPS (every 50ms), we need enough buffer
+        // to smooth out network latency variations
+        this.interpolationDelay = 150; // ms - intentional delay for smooth interpolation
 
         this.init();
     }
