@@ -8,7 +8,10 @@ Browser-based online multiplayer game using Python and JavaScript. Players are d
 
 - **Real-time multiplayer** / Многопользовательская игра в реальном времени
 - **WebSocket communication** / WebSocket соединение для синхронизации
-- **Canvas-based rendering** / Рендеринг через Canvas
+- **Multiple versions** / Несколько версий:
+  - **Canvas version** - Vanilla JS with HTML5 Canvas / Чистый JS с Canvas
+  - **Phaser.js version** - Popular game framework / Популярный игровой фреймворк
+  - **3D version** - Three.js 3D rendering / 3D рендеринг с Three.js
 - **Player growth mechanics** / Механика роста персонажа
 - **Shooting and collision detection** / Стрельба и определение столкновений
 - **Session limit** / Ограничение количества сессий (до 50 игроков)
@@ -50,8 +53,20 @@ python server/game_server.py
 ```
 
 2. Open your browser and navigate to / Откройте браузер и перейдите по адресу:
+
+**Canvas version (default):**
 ```
 http://localhost:8080
+```
+
+**Phaser.js version:**
+```
+http://localhost:8080/static/index_phaser.html
+```
+
+**3D version:**
+```
+http://localhost:8080/static/index3d.html
 ```
 
 3. Open multiple browser windows/tabs to test multiplayer / Откройте несколько окон/вкладок браузера для тестирования многопользовательского режима
@@ -84,8 +99,12 @@ llm_game/
 ├── server/
 │   └── game_server.py      # Python WebSocket server / Сервер на Python
 ├── static/
-│   ├── index.html          # Game HTML page / HTML страница игры
-│   └── game.js             # Client-side game logic / Клиентская логика
+│   ├── index.html          # Canvas version HTML / HTML Canvas версии
+│   ├── game.js             # Canvas version JS / JS Canvas версии
+│   ├── index_phaser.html   # Phaser.js version HTML / HTML Phaser.js версии
+│   ├── game_phaser.js      # Phaser.js version JS / JS Phaser.js версии
+│   ├── index3d.html        # 3D version HTML / HTML 3D версии
+│   └── game3d.js           # 3D version JS / JS 3D версии
 ├── examples/               # Example and test scripts / Примеры и тесты
 ├── experiments/            # Experimental code / Экспериментальный код
 ├── requirements.txt        # Python dependencies / Зависимости Python
@@ -103,10 +122,24 @@ llm_game/
 
 ### Client Side / Клиентская часть
 
+The game has three client versions, all using the same server:
+
+**Canvas Version (Vanilla JS):**
 - **Canvas rendering**: All game objects drawn on HTML5 Canvas / Рендеринг через Canvas
 - **WebSocket client**: Real-time communication with server / WebSocket для связи с сервером
 - **Input handling**: Keyboard and mouse controls / Обработка клавиатуры и мыши
 - **Smooth rendering**: RequestAnimationFrame for fluid animation / Плавная анимация
+
+**Phaser.js Version:**
+- **Phaser 3 framework**: Industry-standard game framework / Индустриальный стандарт игрового фреймворка
+- **Hardware-accelerated rendering**: WebGL and Canvas support / Аппаратное ускорение через WebGL
+- **Built-in physics**: Arcade physics system / Встроенная физическая система
+- **Same networking**: Uses the same WebSocket server / Использует тот же WebSocket сервер
+- **CDN delivery**: Phaser loaded from CDN for fast access / Phaser загружается из CDN
+
+**3D Version (Three.js):**
+- **3D rendering**: Full 3D graphics with Three.js / Полный 3D рендеринг с Three.js
+- **Same gameplay**: Identical mechanics in 3D space / Та же механика в 3D пространстве
 
 ## Production Deployment / Развертывание в production
 
